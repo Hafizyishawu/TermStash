@@ -1,0 +1,17 @@
+{
+  "name": "commandpad",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A notepad for the commands you use often but cannot remember.",
+  "license": "FSL-1.1-ALv2",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "check": "for f in src/*.js sw.js scripts/*.js test/*.js test/fixtures/*.js; do node --check \"$f\" || exit 1; done",
+    "check-packs": "node scripts/check-packs.js packs",
+    "build": "node scripts/build-site.js",
+    "serve": "python3 -m http.server 8765 --bind 127.0.0.1"
+  }
+}

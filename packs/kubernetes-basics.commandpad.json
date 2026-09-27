@@ -1,0 +1,38 @@
+{
+  "format": "commandpad-pack",
+  "version": 1,
+  "name": "Kubernetes basics",
+  "exportedAt": "2026-09-27T00:00:00.000Z",
+  "commands": [
+    {
+      "title": "kubectl: logs for <pod> in <namespace>",
+      "command": "kubectl logs -f {{pod}} -n {{namespace:default}} --tail=200",
+      "description": "Follow the last 200 log lines of a pod.",
+      "tags": ["k8s", "debugging"]
+    },
+    {
+      "title": "kubectl: exec into <pod> in <namespace>",
+      "command": "kubectl exec -it {{pod}} -n {{namespace:default}} -- /bin/sh",
+      "description": "Open a shell in a running pod. Many distroless images have no shell.",
+      "tags": ["k8s", "debugging"]
+    },
+    {
+      "title": "kubectl: list pods not running",
+      "command": "kubectl get pods -A --field-selector=status.phase!=Running",
+      "description": "Every pod in the cluster that is not in the Running phase.",
+      "tags": ["k8s", "triage"]
+    },
+    {
+      "title": "kubectl: decode a secret key",
+      "command": "kubectl get secret {{name}} -n {{namespace}} -o jsonpath='{.data.{{key}}}' | base64 -d",
+      "description": "Prints the secret value to your terminal. Mind your scrollback and screen sharing.",
+      "tags": ["k8s"]
+    },
+    {
+      "title": "kubectl: port-forward a service",
+      "command": "kubectl port-forward svc/{{service}} {{local_port:8080}}:{{remote_port:80}} -n {{namespace}}",
+      "description": "",
+      "tags": ["k8s", "networking"]
+    }
+  ]
+}

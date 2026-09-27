@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- The page makes no network requests. connect-src 'none' makes that a
+       guarantee rather than a promise: saved commands cannot be sent anywhere
+       even if a future change or a malicious pack tried to. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'; object-src 'none'">
+  <meta name="referrer" content="no-referrer">
+  <meta name="color-scheme" content="dark light">
+  <meta name="theme-color" content="#0a0b0d">
+  <title>CommandPad</title>
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <div class="app">
+    <header class="appbar">
+      <div class="brand">
+        <img src="icon.svg" alt="" width="22" height="22">
+        <span class="brand-name">CommandPad</span>
+        <span class="brand-pill" title="Nothing leaves this browser">Local &middot; offline</span>
+      </div>
+      <nav class="appbar-actions" aria-label="Pack actions">
+        <button id="import-pack" type="button" class="btn btn-quiet">Import</button>
+        <button id="export-pack" type="button" class="btn btn-quiet">Export</button>
+        <button id="new-command" type="button" class="btn btn-primary">New command <kbd class="kbd kbd-on-accent">N</kbd></button>
+        <input id="import-file" type="file" accept=".json,application/json" hidden>
+      </nav>
+    </header>
+
+    <div id="banner" class="banner" role="status" hidden></div>
+
+    <section class="palette" aria-label="Commands">
+      <div class="palette-search">
+        <svg class="search-icon" viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M13 13l4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        <input id="search" type="search" placeholder="Search commands, or #tag" aria-label="Search commands" aria-controls="command-list" autocomplete="off" spellcheck="false">
+        <kbd class="kbd" aria-hidden="true">/</kbd>
+      </div>
+
+      <ul id="command-list" class="rows"></ul>
+
+      <div id="no-results" class="no-results" hidden>
+        <p class="no-results-title">No saved command matches</p>
+        <p id="no-results-query" class="no-results-query mono"></p>
+        <button type="button" id="no-results-new" class="btn btn-primary">Save as new command <kbd class="kbd kbd-on-accent">&crarr;</kbd></button>
+      </div>
+
+      <section id="empty-state" class="empty" hidden>
+        <div class="empty-mark" aria-hidden="true">
+          <svg viewBox="0 0 64 64"><path d="M18 22l10 10-10 10" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M33 42h14" stroke="currentColor" stroke-width="4" stroke-linecap="round"/></svg>
+        </div>
+        <h2>Paste a command to begin</h2>
+        <p>Press <kbd class="kbd">&#8984;V</kbd> anywhere on this page, then <kbd class="kbd">&crarr;</kbd> to save it. CommandPad names it for you, and one keystroke copies it back.</p>
+        <p class="empty-example">
+          <span class="mono">kubectl logs <span class="ph">{{pod}}</span> -n <span class="ph">{{namespace:default}}</span></span>
+        </p>
+        <p class="muted">Use <span class="mono">{{name}}</span> for values that change between runs and for anything secret. You fill them in when you copy.</p>
+      </section>
+
+      <footer class="palette-foot">
+        <span id="result-count" class="foot-count" aria-live="polite"></span>
+        <span class="foot-hints" aria-hidden="true">
+          <span><kbd class="kbd">&uarr;</kbd><kbd class="kbd">&darr;</kbd> Navigate</span>
+          <span><kbd class="kbd">&crarr;</kbd> Copy</span>
+          <span><kbd class="kbd" data-mod>&#8984;</kbd><kbd class="kbd">E</kbd> Edit</span>
+        </span>
+      </footer>
+    </section>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+  <dialog id="editor-dialog" aria-labelledby="editor-heading">
+    <form id="editor-form" novalidate>
+      <header class="dialog-head">
+        <h2 id="editor-heading">New command</h2>
+      </header>
+      <div class="dialog-body">
+        <div class="field">
+          <label for="field-command">Command</label>
+          <textarea id="field-command" rows="3" spellcheck="false" autocomplete="off" class="mono input input-code" placeholder="kubectl logs -f {{pod}} -n {{namespace:default}}"></textarea>
+          <p class="hint">Wrap changing or secret values as <span class="mono">{{name}}</span> or <span class="mono">{{name:default}}</span>.</p>
+        </div>
+        <div id="editor-secret-warning" class="callout callout-warn" hidden></div>
+        <div class="field">
+          <label for="field-title">Title <span id="title-hint" class="auto-pill" hidden>Auto-named</span></label>
+          <input id="field-title" class="input" autocomplete="off">
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label for="field-tags">Tags</label>
+            <input id="field-tags" class="input" autocomplete="off" placeholder="k8s, debugging">
+          </div>
+        </div>
+        <div class="field">
+          <label for="field-description">Note <span class="muted">optional</span></label>
+          <textarea id="field-description" class="input" rows="2" placeholder="When to use it, or what to watch out for"></textarea>
+        </div>
+        <p id="editor-errors" class="callout callout-error" hidden></p>
+      </div>
+      <footer class="dialog-foot">
+        <span class="dialog-foot-hint"><kbd class="kbd" data-mod>&#8984;</kbd><kbd class="kbd">&crarr;</kbd> to save</span>
+        <button type="button" class="btn btn-quiet" data-close>Cancel</button>
+        <button type="submit" class="btn btn-primary">Save</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <dialog id="fill-dialog" aria-labelledby="fill-heading">
+    <form id="fill-form" novalidate>
+      <header class="dialog-head">
+        <p class="eyebrow">Fill in values</p>
+        <h2 id="fill-heading"></h2>
+      </header>
+      <div class="dialog-body">
+        <div id="fill-fields" class="fill-fields"></div>
+        <pre id="fill-preview" class="terminal mono"></pre>
+        <p class="hint">Values stay in memory for this tab and are never saved.</p>
+      </div>
+      <footer class="dialog-foot">
+        <button type="button" class="btn btn-quiet" data-close>Cancel</button>
+        <button type="submit" class="btn btn-primary" id="fill-submit">Copy</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <dialog id="export-dialog" aria-labelledby="export-heading">
+    <form id="export-form" novalidate>
+      <header class="dialog-head">
+        <h2 id="export-heading">Export a pack</h2>
+        <p class="hint">A JSON file to share with colleagues or keep as a backup. Commands that look like they contain secrets are never exported.</p>
+      </header>
+      <div class="dialog-body">
+        <div class="field">
+          <label for="export-name">Pack name</label>
+          <input id="export-name" class="input" autocomplete="off">
+        </div>
+        <fieldset class="segmented">
+          <legend>Include</legend>
+          <label><input type="radio" name="export-scope" value="all" checked><span id="export-scope-all">All commands</span></label>
+          <label><input type="radio" name="export-scope" value="shown"><span id="export-scope-shown">Current search</span></label>
+        </fieldset>
+        <div id="export-blocked" class="callout callout-warn" hidden></div>
+      </div>
+      <footer class="dialog-foot">
+        <button type="button" class="btn btn-quiet" data-close>Cancel</button>
+        <button type="submit" class="btn btn-primary" id="export-submit">Download</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <dialog id="import-dialog" aria-labelledby="import-heading">
+    <form id="import-form" novalidate>
+      <header class="dialog-head">
+        <h2 id="import-heading">Import a pack</h2>
+        <p id="import-summary" class="hint"></p>
+      </header>
+      <div class="dialog-body">
+        <div id="import-errors" class="callout callout-error" hidden></div>
+        <ul id="import-list" class="import-list"></ul>
+      </div>
+      <footer class="dialog-foot">
+        <button type="button" class="btn btn-quiet" data-close>Cancel</button>
+        <button type="submit" class="btn btn-primary" id="import-submit">Import</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <dialog id="confirm-dialog" class="dialog-small" aria-labelledby="confirm-heading">
+    <form id="confirm-form" novalidate>
+      <header class="dialog-head">
+        <h2 id="confirm-heading"></h2>
+      </header>
+      <div class="dialog-body">
+        <p id="confirm-message" class="confirm-message"></p>
+      </div>
+      <footer class="dialog-foot">
+        <button type="button" class="btn btn-quiet" data-close id="confirm-cancel">Cancel</button>
+        <button type="submit" class="btn btn-primary" id="confirm-accept">Confirm</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <script src="src/placeholders.js"></script>
+  <script src="src/secrets.js"></script>
+  <script src="src/commands.js"></script>
+  <script src="src/packs.js"></script>
+  <script src="src/namer.js"></script>
+  <script src="src/app.js"></script>
+</body>
+</html>

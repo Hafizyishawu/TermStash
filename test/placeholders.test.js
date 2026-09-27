@@ -1,0 +1,39 @@
+"use strict";
+
+const test = require("node:test");
+const assert = require("node:assert/strict");
+const { parse, fill, segments } = require("../src/placeholders.js");
+
+test("parse returns each placeholder once with its default", () => {
+  assert.deepEqual(parse("kubectl -n {{ns:default}} logs {{pod}} -n {{ns}}"), [
+    { name: "ns", defaultValue: "default" },
+    { name: "pod", defaultValue: "" },
+  ]);
+});
+
+test("a later occurrence can supply a default the first one lacked", () => {
+  assert.deepEqual(parse("{{ns}} {{ns:prod}}"), [{ name: "ns", defaultValue: "prod" }]);
+});
+
+test("fill substitutes values, falls back to defaults, and reports what is missing", () => {
+  const result = fill("ssh {{user:ubuntu}}@{{host}} -p {{port}}", { host: "10.0.0.5" });
+  assert.equal(result.text, "ssh ubuntu@10.0.0.5 -p ");
+  assert.deepEqual(result.missing, ["port"]);
+});
+
+test("an explicitly empty value falls back to the default", () => {
+  assert.equal(fill("{{ns:prod}}", { ns: "" }).text, "prod");
+});
+
+test("braces that are not placeholders are left alone", () => {
+  const command = "kubectl get pods -o jsonpath='{.items[*].metadata.name}' {{ x }}";
+  assert.equal(fill(command, { x: "ok" }).text, "kubectl get pods -o jsonpath='{.items[*].metadata.name}' ok");
+});
+
+test("segments split literal text from placeholders for highlighting", () => {
+  assert.deepEqual(segments("a {{b}} c"), [
+    { type: "text", value: "a " },
+    { type: "placeholder", value: "{{b}}", name: "b" },
+    { type: "text", value: " c" },
+  ]);
+});
