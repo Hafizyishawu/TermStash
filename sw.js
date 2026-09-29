@@ -16,6 +16,7 @@ const SHELL = [
   "src/commands.js",
   "src/packs.js",
   "src/namer.js",
+  "src/catalog.js",
   "src/app.js",
 ];
 

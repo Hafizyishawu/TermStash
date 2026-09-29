@@ -55,6 +55,13 @@ const negatives = [
   "curl --token-file=/run/secrets/token https://api.example.com",
   "echo 'reset password for user alice'",
   "curl -H 'Authorization: Basic {{credentials}}' https://jenkins.example.com",
+  // False positives found in real reference docs.
+  "docker run -d --user 1000:1000 {{image}}:{{tag}}",
+  "aws logs filter-log-events --log-group-name /app/api --start-time $(date -d '1 hour ago' -u +%Y-%m-%dT%H:%M:%SZ)",
+  `"startsAt": "'$(date -u +%Y-%m-%dT%H:%M:%S.000Z)'",`,
+  "docker build --secret id=mysecret,src=./secret.txt -t app .",
+  "sed 's/password=[^ ]*/password=REDACTED/g' /var/log/application.log",
+  "grep -v 'token=***' app.log",
 ];
 
 module.exports = [

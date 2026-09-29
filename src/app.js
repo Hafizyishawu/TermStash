@@ -5,6 +5,12 @@
   "use strict";
 
   const { placeholders, secrets, commands, packs, namer } = window.CommandPad;
+  // Built-in suggestions. They are read-only and never written to storage, so
+  // they cannot clutter saved commands, exports or backups.
+  const catalog = window.CommandPad.catalog || [];
+  const CATALOG_RESULT_LIMIT = 40;
+  // Share of a pasted command's words a suggestion must contain to count as similar.
+  const SIMILARITY_THRESHOLD = 0.6;
 
   const BACKUP_NUDGE_AFTER_MS = 14 * 24 * 60 * 60 * 1000;
   const BACKUP_NUDGE_MIN_COMMANDS = 5;
@@ -23,7 +29,9 @@
   let storageProblem = null;
   let rawUnreadableData = null;
   let editingId = null;
-  let selectedId = null;
+  // Rows are items of three kinds: "saved" commands, "catalog" suggestions,
+  // and a "draft" row offering to save pasted text. Keys are "<kind>:<id>".
+  let selectedKey = null;
   let lastSuggestedTitle = "";
   let fillTarget = null;
   let pendingImport = null;
@@ -115,19 +123,128 @@
     return hash % 360;
   }
 
+  function itemKey(item) {
+    return `${item.kind}:${item.cmd.id}`;
+  }
+
+  // Catalog matches exclude anything already saved, ranked by how many search
+  // words appear in the title. Suggestions only show on an empty notepad or
+  // when searching, so they never crowd the user's own list.
+  function catalogSuggestions(query) {
+    if (!catalog.length) return { items: [], total: 0 };
+    if (!query.trim()) {
+      const starters = state.commands.length === 0 ? catalog.filter((entry) => entry.starter) : [];
+      return { items: starters.map((cmd) => ({ kind: "catalog", cmd })), total: starters.length };
+    }
+    const saved = new Set(state.commands.map((cmd) => commands.dedupeKey(cmd.command)));
+    const terms = query.toLowerCase().split(/\s+/).filter((term) => term && !term.startsWith("#"));
+    const ranked = pastedText !== null
+      ? similarCatalogEntries(terms)
+      : commands.search(catalog, query)
+        .map((entry) => ({ entry, score: terms.filter((term) => entry.title.toLowerCase().includes(term)).length }))
+        .sort((a, b) => b.score - a.score)
+        .map(({ entry }) => entry);
+    const matches = ranked.filter((entry) => !saved.has(commands.dedupeKey(entry.command)));
+    return {
+      items: matches.slice(0, CATALOG_RESULT_LIMIT).map((cmd) => ({ kind: "catalog", cmd })),
+      total: matches.length,
+    };
+  }
+
+  // A pasted command rarely matches word-for-word: its values (a pod name, a
+  // namespace) are specific to the person pasting. Similarity is judged only
+  // on words the catalog itself uses, since unknown words are almost always
+  // values, and the program name must match.
+  let catalogVocabulary = null;
+  function normaliseTerm(term) {
+    return term.startsWith("-") ? term.split("=")[0] : term;
+  }
+
+  function vocabulary() {
+    if (!catalogVocabulary) {
+      catalogVocabulary = new Set();
+      for (const entry of catalog) {
+        for (const token of entry.command.toLowerCase().split(/\s+/)) if (token) catalogVocabulary.add(normaliseTerm(token));
+      }
+    }
+    return catalogVocabulary;
+  }
+
+  function similarCatalogEntries(queryTerms) {
+    const known = vocabulary();
+    const program = normaliseTerm(queryTerms[0] || "");
+    const terms = [...new Set(queryTerms.map(normaliseTerm))].filter((term) => known.has(term));
+    if (!known.has(program) || terms.length < 2) return [];
+    return catalog
+      .map((entry) => {
+        // Multi-line scripts contain almost every word; compare on their title
+        // and first command line so they do not outrank the one-line match.
+        const firstLine = entry.command.split("\n").find((line) => line.trim() && !line.trim().startsWith("#")) || "";
+        const haystack = [entry.title, firstLine, entry.description, ...entry.tags].join("\n").toLowerCase();
+        const overlap = haystack.includes(program) ? terms.filter((term) => haystack.includes(term)).length / terms.length : 0;
+        return { entry, overlap };
+      })
+      .filter(({ overlap }) => overlap >= SIMILARITY_THRESHOLD)
+      // Ties go to shorter commands, the closest to a single pasted line.
+      .sort((a, b) => b.overlap - a.overlap || a.entry.command.length - b.entry.command.length)
+      .map(({ entry }) => entry);
+  }
+
+  // A pasted command that is not already saved gets a row offering to save
+  // it, placed first so paste-then-Enter keeps meaning "save this".
+  function draftItem(savedMatches) {
+    if (pastedText === null) return null;
+    const key = commands.dedupeKey(pastedText);
+    if (savedMatches.some((item) => commands.dedupeKey(item.cmd.command) === key)) return null;
+    return { kind: "draft", cmd: { id: "pasted", title: "Save as new command", command: pastedText, tags: [] } };
+  }
+
+  function visibleItems() {
+    const query = $("search").value;
+    const saved = commands.search(state.commands, query).map((cmd) => ({ kind: "saved", cmd }));
+    const suggestions = catalogSuggestions(query);
+    const draft = draftItem(saved);
+    return { saved, draft, suggestions: suggestions.items, suggestionTotal: suggestions.total };
+  }
+
+  function orderedItems({ saved, draft, suggestions }) {
+    return [...(draft ? [draft] : []), ...saved, ...suggestions];
+  }
+
+  function selectedItem() {
+    return orderedItems(visibleItems()).find((item) => itemKey(item) === selectedKey) || null;
+  }
+
   function render() {
     renderBanner();
-    const shown = visibleCommands();
-    if (!shown.some((cmd) => cmd.id === selectedId)) selectedId = shown[0]?.id ?? null;
-    $("command-list").replaceChildren(...shown.map((cmd) => renderRow(cmd, cmd.id === selectedId)));
+    const visible = visibleItems();
+    const items = orderedItems(visible);
+    if (!items.some((item) => itemKey(item) === selectedKey)) selectedKey = items[0] ? itemKey(items[0]) : null;
 
     const total = state.commands.length;
     const query = $("search").value.trim();
+    const rows = [];
+    if (visible.draft) rows.push(renderRow(visible.draft));
+    rows.push(...visible.saved.map(renderRow));
+    if (visible.suggestions.length) {
+      const heading = query ? "Suggestions" : "Start with a suggestion";
+      const detail = query && visible.suggestionTotal > visible.suggestions.length
+        ? `Top ${visible.suggestions.length} of ${visible.suggestionTotal}`
+        : "Built-in, not saved until you save them";
+      rows.push(h("li", { className: "group-label", role: "presentation" }, h("span", { text: heading }), h("span", { className: "group-detail", text: detail })));
+      rows.push(...visible.suggestions.map(renderRow));
+    }
+    $("command-list").replaceChildren(...rows);
+
     $("empty-state").hidden = total !== 0 || query !== "";
-    $("command-list").hidden = shown.length === 0;
-    $("no-results").hidden = !(query && shown.length === 0);
+    $("command-list").hidden = items.length === 0;
+    $("no-results").hidden = !(query && items.length === 0);
     $("no-results-query").textContent = query;
-    $("result-count").textContent = total === 0 ? "" : query ? `${shown.length} of ${plural(total, "command")}` : plural(total, "command");
+    $("catalog-count").textContent = catalog.length.toLocaleString();
+    $("catalog-hint").hidden = catalog.length === 0;
+    const savedPart = total === 0 ? "" : query ? `${visible.saved.length} of ${plural(total, "saved command")}` : plural(total, "saved command");
+    const suggestionPart = query && visible.suggestionTotal ? plural(visible.suggestionTotal, "suggestion") : "";
+    $("result-count").textContent = [savedPart, suggestionPart].filter(Boolean).join(" · ");
   }
 
   function renderCommandText(command) {
@@ -136,20 +253,44 @@
     );
   }
 
-  function renderRow(cmd, selected) {
+  function renderRow(item) {
+    const { kind, cmd } = item;
+    const key = itemKey(item);
+    const selected = key === selectedKey;
     const hasPlaceholders = placeholders.parse(cmd.command).length > 0;
-    const flagged = secrets.scan(cmd.command).length > 0;
-    const tool = toolName(cmd.command);
-    const badge = h("span", { className: "tool", "aria-hidden": "true", text: tool.slice(0, 2) });
-    badge.style.setProperty("--hue", String(toolHue(tool)));
+    const isQuery = kind === "catalog" && cmd.language && cmd.language !== "bash";
+    const tool = kind === "catalog" ? cmd.tool : kind === "draft" ? "+" : toolName(cmd.command);
+    const badge = h("span", { className: "tool", "aria-hidden": "true", text: kind === "draft" ? "+" : tool.slice(0, 2) });
+    if (kind !== "draft") badge.style.setProperty("--hue", String(toolHue(tool)));
+
+    const copyLabel = kind === "draft" ? "Save" : hasPlaceholders ? "Fill & copy" : "Copy";
+    const primaryAction = kind === "draft" ? saveSearchAsCommand : () => startCopy(item);
+    let secondary = [];
+    if (kind === "saved") {
+      secondary = [
+        h("button", { type: "button", className: "btn btn-small btn-ghost", text: "Edit", onClick: () => openEditor(cmd.id) }),
+        h("button", { type: "button", className: "btn btn-small btn-ghost is-danger", text: "Delete", onClick: () => confirmDelete(cmd.id) }),
+      ];
+    } else if (kind === "catalog") {
+      secondary = [
+        h("button", { type: "button", className: "btn btn-small btn-ghost", text: "Customize", title: "Open in the editor before saving", onClick: () => customizeSuggestion(item) }),
+        h("button", { type: "button", className: "btn btn-small btn-ghost", text: "Save", title: "Add to your commands as-is", onClick: () => saveSuggestion(item) }),
+      ];
+    }
+
+    const meta = [];
+    if (kind === "saved" && secrets.scan(cmd.command).length) {
+      meta.push(h("span", { className: "badge-warn", text: "Possible secret", title: "Blocked from export. Replace the value with a {{placeholder}}." }));
+    }
+    if (kind === "saved" && cmd.copyCount) meta.push(h("span", { title: `Copied ${plural(cmd.copyCount, "time")}`, text: `${cmd.copyCount}×` }));
 
     return h("li", {
-      className: "row",
-      "data-id": cmd.id,
+      className: `row is-${kind}`,
+      "data-key": key,
       "aria-current": selected ? "true" : "false",
       onClick: (event) => {
         if (event.target.closest("button")) return;
-        if (selectedId !== cmd.id) select(cmd.id);
+        if (!selected) select(key);
       },
     },
       badge,
@@ -161,22 +302,18 @@
           )) : null,
         ),
         h("pre", {
-          className: "row-command mono",
+          className: `row-command mono${isQuery ? " is-query" : ""}`,
           title: selected ? "Click to copy" : null,
-          onClick: selected ? () => startCopy(cmd.id) : null,
+          onClick: selected && kind !== "draft" ? () => startCopy(item) : null,
         }, renderCommandText(cmd.command)),
         selected && cmd.description ? h("p", { className: "row-note", text: cmd.description }) : null,
       ),
       h("div", { className: "row-side" },
-        h("div", { className: "row-meta" },
-          flagged ? h("span", { className: "badge-warn", text: "Possible secret", title: "Blocked from export. Replace the value with a {{placeholder}}." }) : null,
-          cmd.copyCount ? h("span", { title: `Copied ${plural(cmd.copyCount, "time")}`, text: `${cmd.copyCount}×` }) : null,
-        ),
+        h("div", { className: "row-meta" }, meta),
         h("div", { className: "row-actions" },
-          h("button", { type: "button", className: "btn btn-small btn-ghost", text: "Edit", onClick: () => openEditor(cmd.id) }),
-          h("button", { type: "button", className: "btn btn-small btn-ghost is-danger", text: "Delete", onClick: () => confirmDelete(cmd.id) }),
-          h("button", { type: "button", className: "btn btn-small btn-primary", onClick: () => startCopy(cmd.id) },
-            hasPlaceholders ? "Fill & copy" : "Copy",
+          secondary,
+          h("button", { type: "button", className: "btn btn-small btn-primary", onClick: primaryAction },
+            copyLabel,
             selected ? h("kbd", { className: "kbd kbd-on-accent", text: "↵" }) : null,
           ),
         ),
@@ -184,18 +321,40 @@
     );
   }
 
-  function select(id) {
-    selectedId = id;
+  function select(key) {
+    selectedKey = key;
     render();
     document.querySelector('.row[aria-current="true"]')?.scrollIntoView({ block: "nearest" });
   }
 
   function moveSelection(delta) {
-    const shown = visibleCommands();
-    if (!shown.length) return;
-    const index = shown.findIndex((cmd) => cmd.id === selectedId);
-    const next = Math.min(shown.length - 1, Math.max(0, index + delta));
-    select(shown[next].id);
+    const items = orderedItems(visibleItems());
+    if (!items.length) return;
+    const index = items.findIndex((item) => itemKey(item) === selectedKey);
+    const next = Math.min(items.length - 1, Math.max(0, index + delta));
+    select(itemKey(items[next]));
+  }
+
+  function saveSuggestion(item) {
+    const created = commands.create({
+      title: item.cmd.title,
+      command: item.cmd.command,
+      description: item.cmd.description,
+      tags: item.cmd.tags,
+    });
+    state.commands.push(created);
+    selectedKey = `saved:${created.id}`;
+    markChanged();
+    toast(`Saved “${created.title}” to your commands`);
+  }
+
+  function customizeSuggestion(item) {
+    openEditor(null, {
+      title: item.cmd.title,
+      command: item.cmd.command,
+      description: item.cmd.description,
+      tags: item.cmd.tags,
+    });
   }
 
   function renderBanner() {
@@ -262,32 +421,35 @@
     }
   }
 
-  async function copyText(cmd, text) {
+  // Only saved commands track usage; suggestions are read-only and unsaved.
+  async function copyText(item, text) {
     if (!(await writeClipboard(text))) {
       toast("Copy failed. Select the command and copy it manually.");
       return;
     }
-    replaceCommand(commands.recordCopy(cmd));
-    persist();
+    if (item.kind === "saved") {
+      const current = findCommand(item.cmd.id);
+      if (current) replaceCommand(commands.recordCopy(current));
+      persist();
+    }
     render();
-    toast(`Copied “${cmd.title}”`);
+    toast(`Copied “${item.cmd.title}”`);
   }
 
-  function startCopy(id) {
-    const cmd = findCommand(id);
-    if (!cmd) return;
-    const fields = placeholders.parse(cmd.command);
+  function startCopy(item) {
+    if (!item || item.kind === "draft") return;
+    const fields = placeholders.parse(item.cmd.command);
     if (!fields.length) {
-      copyText(cmd, cmd.command);
+      copyText(item, item.cmd.command);
       return;
     }
-    openFill(cmd, fields);
+    openFill(item, fields);
   }
 
-  function openFill(cmd, fields) {
-    fillTarget = cmd.id;
-    const remembered = sessionValues.get(cmd.id) || {};
-    $("fill-heading").textContent = cmd.title;
+  function openFill(item, fields) {
+    fillTarget = item;
+    const remembered = sessionValues.get(itemKey(item)) || {};
+    $("fill-heading").textContent = item.cmd.title;
     const container = $("fill-fields");
     container.replaceChildren(...fields.map((field) => {
       const inputId = `fill-${field.name}`;
@@ -318,12 +480,12 @@
   // The preview highlights filled values and unfilled placeholders, and masks
   // sensitive values to match their password inputs.
   function updateFillPreview() {
-    const cmd = findCommand(fillTarget);
-    if (!cmd) return;
+    if (!fillTarget) return;
+    const { command } = fillTarget.cmd;
     const values = fillValues();
-    const defaults = new Map(placeholders.parse(cmd.command).map((p) => [p.name, p.defaultValue]));
+    const defaults = new Map(placeholders.parse(command).map((p) => [p.name, p.defaultValue]));
     let missing = 0;
-    const parts = placeholders.segments(cmd.command).map((segment) => {
+    const parts = placeholders.segments(command).map((segment) => {
       if (segment.type === "text") return segment.value;
       const value = values[segment.name] || defaults.get(segment.name);
       if (!value) {
@@ -339,29 +501,33 @@
 
   function submitFill(event) {
     event.preventDefault();
-    const cmd = findCommand(fillTarget);
-    if (!cmd) return;
+    if (!fillTarget) return;
+    const item = fillTarget;
     const values = fillValues();
-    sessionValues.set(cmd.id, values);
+    sessionValues.set(itemKey(item), values);
     $("fill-dialog").close();
-    copyText(cmd, placeholders.fill(cmd.command, values).text);
+    copyText(item, placeholders.fill(item.cmd.command, values).text);
   }
 
-  function openEditor(id, prefillCommand) {
+  // `draft` pre-fills a new command: a string is the command alone, an object
+  // may also carry title, description and tags (from a suggestion).
+  function openEditor(id, draft) {
     editingId = id || null;
     const cmd = id ? findCommand(id) : null;
+    const template = typeof draft === "string" ? { command: draft } : draft || {};
+    const source = cmd || template;
     $("editor-heading").textContent = cmd ? "Edit command" : "New command";
-    $("field-command").value = cmd ? cmd.command : prefillCommand || "";
-    $("field-title").value = cmd ? cmd.title : "";
-    $("field-description").value = cmd ? cmd.description : "";
-    $("field-tags").value = cmd ? cmd.tags.join(", ") : "";
+    $("field-command").value = source.command || "";
+    $("field-title").value = source.title || "";
+    $("field-description").value = source.description || "";
+    $("field-tags").value = (source.tags || []).join(", ");
     $("editor-errors").hidden = true;
-    // An existing title keeps following the command only if it was never
-    // customised, which is when it still equals what the namer would say.
-    lastSuggestedTitle = cmd ? (cmd.title === namer.suggestTitle(cmd.command) ? cmd.title : null) : "";
+    // A title keeps following the command only if nobody chose it: an
+    // existing title that still equals what the namer would say, or none.
+    lastSuggestedTitle = source.title ? (source.title === namer.suggestTitle(source.command || "") ? source.title : null) : "";
     onCommandInput();
     $("editor-dialog").showModal();
-    (cmd || !prefillCommand ? $("field-command") : $("field-title")).focus();
+    (cmd || !source.command ? $("field-command") : $("field-title")).focus();
   }
 
   function onCommandInput() {
@@ -432,7 +598,8 @@
       savedId = created.id;
     }
     if ($("editor-dialog").open) $("editor-dialog").close();
-    selectedId = savedId;
+    selectedKey = `saved:${savedId}`;
+    pastedText = null;
     markChanged();
     toast(editingId ? "Saved" : "Added to your notepad");
   }
@@ -658,20 +825,37 @@
       event.preventDefault();
       return true;
     }
+    const item = selectedItem();
     if (event.key === "ArrowDown") moveSelection(1);
     else if (event.key === "ArrowUp") moveSelection(-1);
-    else if (event.key === "Enter" && hasModifier(event)) selectedId && openEditor(selectedId);
+    else if (event.key === "Enter" && hasModifier(event)) editItem(item);
     else if (event.key === "Enter") {
-      if (selectedId) startCopy(selectedId);
+      if (item?.kind === "draft") saveSearchAsCommand();
+      else if (item) startCopy(item);
       else if ($("search").value.trim()) saveSearchAsCommand();
     }
-    else if (event.key.toLowerCase() === "e" && hasModifier(event)) selectedId && openEditor(selectedId);
+    else if (event.key.toLowerCase() === "e" && hasModifier(event)) editItem(item);
+    else if (event.key.toLowerCase() === "s" && hasModifier(event)) {
+      if (item?.kind === "catalog") saveSuggestion(item);
+      else if (item?.kind === "draft") saveSearchAsCommand();
+    }
     // Cmd+Backspace inside the search box is the platform's delete-line
     // shortcut, so deletion by keyboard is only bound outside it.
-    else if (event.key === "Backspace" && hasModifier(event) && event.target !== $("search")) selectedId && confirmDelete(selectedId);
+    else if (event.key === "Backspace" && hasModifier(event) && event.target !== $("search")) {
+      if (item?.kind === "saved") confirmDelete(item.cmd.id);
+    }
     else return false;
     event.preventDefault();
     return true;
+  }
+
+  // Editing a suggestion opens it as a new command; nothing is saved until
+  // the editor's Save.
+  function editItem(item) {
+    if (!item) return;
+    if (item.kind === "saved") openEditor(item.cmd.id);
+    else if (item.kind === "catalog") customizeSuggestion(item);
+    else saveSearchAsCommand();
   }
 
   function onGlobalKey(event) {
@@ -687,9 +871,9 @@
     } else if (event.key.toLowerCase() === "n") {
       event.preventDefault();
       openEditor(null);
-    } else if (event.key.toLowerCase() === "e" && selectedId) {
+    } else if (event.key.toLowerCase() === "e" && selectedItem()) {
       event.preventDefault();
-      openEditor(selectedId);
+      editItem(selectedItem());
     }
   }
 
@@ -764,8 +948,6 @@
   function localiseShortcuts() {
     if (IS_MAC) return;
     for (const node of document.querySelectorAll("[data-mod]")) node.textContent = "Ctrl";
-    const pasteHint = document.querySelector(".empty .kbd");
-    if (pasteHint) pasteHint.textContent = "Ctrl V";
   }
 
   function registerServiceWorker() {

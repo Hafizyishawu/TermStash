@@ -40,6 +40,12 @@
         <kbd class="kbd" aria-hidden="true">/</kbd>
       </div>
 
+      <section id="empty-state" class="intro" hidden>
+        <h2>Your command notepad</h2>
+        <p>Paste a command anywhere, then press <kbd class="kbd">&crarr;</kbd> to save it. CommandPad names it for you, and one keystroke copies it back.</p>
+        <p id="catalog-hint" class="muted">Or start from a suggestion below. Search covers <span id="catalog-count">0</span> built-in commands: try <span class="mono">#kubectl</span> or <span class="mono">rollout</span>.</p>
+      </section>
+
       <ul id="command-list" class="rows"></ul>
 
       <div id="no-results" class="no-results" hidden>
@@ -47,18 +53,6 @@
         <p id="no-results-query" class="no-results-query mono"></p>
         <button type="button" id="no-results-new" class="btn btn-primary">Save as new command <kbd class="kbd kbd-on-accent">&crarr;</kbd></button>
       </div>
-
-      <section id="empty-state" class="empty" hidden>
-        <div class="empty-mark" aria-hidden="true">
-          <svg viewBox="0 0 64 64"><path d="M18 22l10 10-10 10" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M33 42h14" stroke="currentColor" stroke-width="4" stroke-linecap="round"/></svg>
-        </div>
-        <h2>Paste a command to begin</h2>
-        <p>Press <kbd class="kbd">&#8984;V</kbd> anywhere on this page, then <kbd class="kbd">&crarr;</kbd> to save it. CommandPad names it for you, and one keystroke copies it back.</p>
-        <p class="empty-example">
-          <span class="mono">kubectl logs <span class="ph">{{pod}}</span> -n <span class="ph">{{namespace:default}}</span></span>
-        </p>
-        <p class="muted">Use <span class="mono">{{name}}</span> for values that change between runs and for anything secret. You fill them in when you copy.</p>
-      </section>
 
       <footer class="palette-foot">
         <span id="result-count" class="foot-count" aria-live="polite"></span>
@@ -189,6 +183,7 @@
   <script src="src/commands.js"></script>
   <script src="src/packs.js"></script>
   <script src="src/namer.js"></script>
+  <script src="src/catalog.js"></script>
   <script src="src/app.js"></script>
 </body>
 </html>

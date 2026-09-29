@@ -44,6 +44,33 @@ clipboard API are not available to `file://` pages.
 Search matches title, command, description and tags. Every word must match.
 `#k8s` matches the tag exactly. Results are ordered by how often you copy them.
 
+## Built-in suggestions
+
+CommandPad ships with about 1,400 read-only commands for kubectl, AWS, Docker,
+Helm, Terraform, GitHub CLI, PromQL, LogQL, SQL and more. A few starters show on
+an empty notepad. All of them turn up in search, grouped below your own
+matches. Pasting a command also surfaces similar suggestions, judged on the
+command's shape rather than your specific values.
+
+Suggestions are never saved unless you choose **Save** (`Cmd+S`) or
+**Customize** (`Cmd+E`, opens the editor first). They are never counted, never
+exported and never backed up, so they cannot clutter your notepad. Copying one
+works like copying a saved command, placeholders included.
+
+The catalog in `src/catalog.js` is generated from a directory of markdown
+reference docs, one entry per fenced shell, PromQL, LogQL or SQL block:
+
+```bash
+node scripts/build-catalog.js --source path/to/docs --rules path/to/rules.json
+```
+
+The rules file sits with the docs, not in this repository. It lists ordered
+regex replacements that turn environment-specific names into
+`{{placeholders}}`, plus forbidden patterns. If any forbidden pattern survives,
+the build writes nothing. `test/catalog.test.js` adds the checks that don't
+need the rules file, and CI runs them: no secrets, no internal hostnames or
+email addresses, no leftover `<angle>` markers, and valid placeholders.
+
 ## Placeholders
 
 `{{name}}` or `{{name:default}}`. Names can contain letters, digits, `_`, `.`
@@ -105,7 +132,7 @@ browser needs. Deploy `dist/`, never the repository root, because the root
 would publish tests, docs and CI config. The build fails if the service worker
 precaches a file that is missing from the output.
 
-Hosted at commandpad.app on Cloudflare Pages:
+Hosted at commandpad.me on Cloudflare Pages:
 
 | Setting | Value |
 | --- | --- |

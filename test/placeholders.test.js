@@ -30,6 +30,12 @@ test("braces that are not placeholders are left alone", () => {
   assert.equal(fill(command, { x: "ok" }).text, "kubectl get pods -o jsonpath='{.items[*].metadata.name}' ok");
 });
 
+test("go template actions are not placeholders", () => {
+  const command = "docker inspect {{name}} --format='{{range .Config.Env}}{{println .}}{{end}}'";
+  assert.deepEqual(parse(command).map((p) => p.name), ["name"]);
+  assert.equal(fill(command, { name: "api" }).text, "docker inspect api --format='{{range .Config.Env}}{{println .}}{{end}}'");
+});
+
 test("segments split literal text from placeholders for highlighting", () => {
   assert.deepEqual(segments("a {{b}} c"), [
     { type: "text", value: "a " },

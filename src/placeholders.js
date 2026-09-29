@@ -8,7 +8,10 @@
 })(typeof self !== "undefined" ? self : this, function () {
   "use strict";
 
-  const PLACEHOLDER_PATTERN = /\{\{\s*([A-Za-z_][A-Za-z0-9_.-]*)\s*(?::([^}]*))?\}\}/g;
+  // Go and Helm template actions such as {{end}} or {{else}} share the braces,
+  // so their keywords are never treated as placeholder names.
+  const PLACEHOLDER_PATTERN =
+    /\{\{\s*(?!(?:end|else|range|if|with|define|template|block|break|continue)\s*\}\})([A-Za-z_][A-Za-z0-9_.-]*)\s*(?::([^}]*))?\}\}/g;
 
   function parse(command) {
     const seen = new Map();

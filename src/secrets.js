@@ -15,6 +15,8 @@
   "use strict";
 
   const NOT_A_REFERENCE = "(?![{$<(])";
+  // Values that are already masked, as in a redaction command.
+  const NOT_A_MASK = "(?!(?:redacted|\\*{3,}|x{3,})(?![A-Za-z0-9]))";
 
   const RULES = [
     { id: "private-key", label: "Private key block", pattern: /-----BEGIN [A-Z ]*PRIVATE KEY-----/ },
@@ -45,20 +47,20 @@
     {
       id: "user-password-flag",
       label: "Password in -u/--user flag",
-      pattern: new RegExp(`(?:^|\\s)(?:-u|--user)\\s+["']?[^\\s:"']+:${NOT_A_REFERENCE}[^\\s"']{3,}`),
+      pattern: new RegExp(`(?:^|\\s)(?:-u|--user)\\s+["']?(?![+%])(?!\\d+:\\d+(?:[\\s"']|$))[^\\s:"']+:${NOT_A_REFERENCE}[^\\s"']{3,}`),
     },
     {
       id: "secret-assignment",
       label: "Password, token or key assigned inline",
       pattern: new RegExp(
-        `(?:password|passwd|secret|token|api[_-]?key|access[_-]?key)["']?\\s*[=:]\\s*["']?${NOT_A_REFERENCE}[^\\s"'{}&;|]{6,}`,
+        `(?:password|passwd|secret|token|api[_-]?key|access[_-]?key)["']?\\s*[=:]\\s*["']?${NOT_A_REFERENCE}${NOT_A_MASK}[^\\s"'{}&;|]{6,}`,
         "i",
       ),
     },
     {
       id: "secret-flag",
       label: "Password, token or key passed as a flag",
-      pattern: new RegExp(`--(?:password|passwd|token|api-key|secret)\\s+["']?${NOT_A_REFERENCE}(?!-)[^\\s"']{6,}`, "i"),
+      pattern: new RegExp(`--(?:password|passwd|token|api-key|secret)\\s+["']?${NOT_A_REFERENCE}(?!-)(?!id=)[^\\s"']{6,}`, "i"),
     },
   ];
 
