@@ -10,7 +10,7 @@
 (function (root, factory) {
   const api = factory();
   if (typeof module === "object" && module.exports) module.exports = api;
-  else (root.CommandPad = root.CommandPad || {}).secrets = api;
+  else (root.TermStash = root.TermStash || {}).secrets = api;
 })(typeof self !== "undefined" ? self : this, function () {
   "use strict";
 

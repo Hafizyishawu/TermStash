@@ -1,10 +1,10 @@
-# CommandPad
+# TermStash
 
 A notepad for the commands you use often but cannot remember. Paste a command
-and CommandPad names it. When you need it again, one click copies it.
+and TermStash names it. When you need it again, one click copies it.
 
 - **Placeholders.** Save `kubectl logs -f {{pod}} -n {{namespace:default}}`. When
-  you copy, CommandPad asks for `pod` and `namespace`. Placeholder values are
+  you copy, TermStash asks for `pod` and `namespace`. Placeholder values are
   held in memory for the tab and never saved.
 - **Automatic names.** Titles are suggested from what the command does, for
   example `kubectl: logs for <pod> in <namespace>` or `aws: s3 ls s3://bucket
@@ -12,7 +12,7 @@ and CommandPad names it. When you need it again, one click copies it.
   browser.
 - **Secret warnings.** A command that looks like it contains a credential gets a
   warning when you save it, and it cannot be exported.
-- **Packs.** Commands are shared as `.commandpad.json` files. Import shows every
+- **Packs.** Commands are shared as `.termstash.json` files. Import shows every
   command before anything is added.
 - **Offline and local.** No backend, no accounts, no network requests. Once it
   has loaded over http(s), a service worker keeps it working offline.
@@ -46,7 +46,7 @@ Search matches title, command, description and tags. Every word must match.
 
 ## Built-in suggestions
 
-CommandPad ships with about 1,400 read-only commands for kubectl, AWS, Docker,
+TermStash ships with about 1,400 read-only commands for kubectl, AWS, Docker,
 Helm, Terraform, GitHub CLI, PromQL, LogQL, SQL and more. A few starters show on
 an empty notepad. All of them turn up in search, grouped below your own
 matches. Pasting a command also surfaces similar suggestions, judged on the
@@ -77,7 +77,7 @@ email addresses, no leftover `<angle>` markers, and valid placeholders.
 and `-`. A name used twice is asked for once. Placeholders whose names contain
 `pass`, `secret`, `token`, `key`, `credential` or `auth` get a masked input.
 
-Values are inserted exactly as typed. CommandPad does not shell-quote them.
+Values are inserted exactly as typed. TermStash does not shell-quote them.
 
 ## Sharing commands with a team
 
@@ -101,10 +101,10 @@ It exits non-zero if a pack is malformed or contains a possible secret.
 
 Commands are stored in this browser's local storage, under this site's origin.
 They are not synced between browsers or devices. Clearing site data deletes
-them. After a while CommandPad reminds you to export a backup. That backup is a
+them. After a while TermStash reminds you to export a backup. That backup is a
 normal pack, which you can import on a new machine.
 
-If stored data cannot be read, for example after a downgrade, CommandPad stops
+If stored data cannot be read, for example after a downgrade, TermStash stops
 saving so nothing gets overwritten. It then offers the raw data as a download.
 
 ## Security model
@@ -132,7 +132,7 @@ browser needs. Deploy `dist/`, never the repository root, because the root
 would publish tests, docs and CI config. The build fails if the service worker
 precaches a file that is missing from the output.
 
-Hosted at commandpad.me on Cloudflare Pages:
+Hosted at termstash.app on Cloudflare Pages:
 
 | Setting | Value |
 | --- | --- |
@@ -142,7 +142,7 @@ Hosted at commandpad.me on Cloudflare Pages:
 
 `_headers` sets the security headers, which Cloudflare Pages and Netlify both
 read. It adds `frame-ancestors 'none'`, which only works as a header and stops
-another site from framing CommandPad to trick people into clicking. It also
+another site from framing TermStash to trick people into clicking. It also
 marks `sw.js` as `no-cache`, so a deploy reaches people on their next visit.
 Anything served from `dist/` is readable by every visitor, since browsers
 download the full app source.

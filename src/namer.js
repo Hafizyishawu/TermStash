@@ -9,7 +9,7 @@
 (function (root, factory) {
   const api = factory();
   if (typeof module === "object" && module.exports) module.exports = api;
-  else (root.CommandPad = root.CommandPad || {}).namer = api;
+  else (root.TermStash = root.TermStash || {}).namer = api;
 })(typeof self !== "undefined" ? self : this, function () {
   "use strict";
 

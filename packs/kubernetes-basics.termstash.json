@@ -1,5 +1,5 @@
 {
-  "format": "commandpad-pack",
+  "format": "termstash-pack",
   "version": 1,
   "name": "Kubernetes basics",
   "exportedAt": "2026-09-27T00:00:00.000Z",

@@ -4,7 +4,7 @@
 (function (root, factory) {
   const api = factory();
   if (typeof module === "object" && module.exports) module.exports = api;
-  else (root.CommandPad = root.CommandPad || {}).placeholders = api;
+  else (root.TermStash = root.TermStash || {}).placeholders = api;
 })(typeof self !== "undefined" ? self : this, function () {
   "use strict";
 

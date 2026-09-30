@@ -6,14 +6,14 @@
   const deps =
     typeof module === "object" && module.exports
       ? { commands: require("./commands.js"), secrets: require("./secrets.js") }
-      : root.CommandPad;
+      : root.TermStash;
   const api = factory(deps.commands, deps.secrets);
   if (typeof module === "object" && module.exports) module.exports = api;
-  else root.CommandPad.packs = api;
+  else root.TermStash.packs = api;
 })(typeof self !== "undefined" ? self : this, function (commands, secrets) {
   "use strict";
 
-  const FORMAT = "commandpad-pack";
+  const FORMAT = "termstash-pack";
   const FORMAT_VERSION = 1;
   const MAX_PACK_BYTES = 1024 * 1024;
   const MAX_PACK_COMMANDS = 1000;
@@ -43,7 +43,7 @@
     return {
       format: FORMAT,
       version: FORMAT_VERSION,
-      name: String(name || "CommandPad pack").trim().slice(0, commands.LIMITS.titleLength),
+      name: String(name || "TermStash pack").trim().slice(0, commands.LIMITS.titleLength),
       exportedAt: now.toISOString(),
       commands: exportable.map((cmd) => ({
         title: cmd.title,
@@ -71,9 +71,9 @@
       return { pack: null, errors: ["Pack is not valid JSON."] };
     }
     if (!data || typeof data !== "object" || Array.isArray(data)) return { pack: null, errors: ["Pack must be a JSON object."] };
-    if (data.format !== FORMAT) return { pack: null, errors: [`Not a CommandPad pack (format must be "${FORMAT}").`] };
+    if (data.format !== FORMAT) return { pack: null, errors: [`Not a TermStash pack (format must be "${FORMAT}").`] };
     if (data.version !== FORMAT_VERSION) {
-      return { pack: null, errors: [`Unsupported pack version ${data.version}; this CommandPad reads version ${FORMAT_VERSION}.`] };
+      return { pack: null, errors: [`Unsupported pack version ${data.version}; this TermStash reads version ${FORMAT_VERSION}.`] };
     }
     if (!Array.isArray(data.commands)) return { pack: null, errors: ["Pack has no commands list."] };
     if (data.commands.length > MAX_PACK_COMMANDS) return { pack: null, errors: [`Pack has more than ${MAX_PACK_COMMANDS} commands.`] };

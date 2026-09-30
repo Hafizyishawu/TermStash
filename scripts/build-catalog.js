@@ -208,7 +208,7 @@ function render(entries) {
 (function (root, factory) {
   const api = factory();
   if (typeof module === "object" && module.exports) module.exports = api;
-  else (root.CommandPad = root.CommandPad || {}).catalog = api;
+  else (root.TermStash = root.TermStash || {}).catalog = api;
 })(typeof self !== "undefined" ? self : this, function () {
   "use strict";
   return Object.freeze([

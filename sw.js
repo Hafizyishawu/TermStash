@@ -3,7 +3,7 @@
 // a version string. The cache is only a fallback for when the network is gone.
 "use strict";
 
-const CACHE_NAME = "commandpad-shell";
+const CACHE_NAME = "termstash-shell";
 const NETWORK_TIMEOUT_MS = 3000;
 const SHELL = [
   "./",

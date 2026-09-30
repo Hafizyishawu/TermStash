@@ -3,11 +3,11 @@
 (function (root, factory) {
   const api = factory();
   if (typeof module === "object" && module.exports) module.exports = api;
-  else (root.CommandPad = root.CommandPad || {}).commands = api;
+  else (root.TermStash = root.TermStash || {}).commands = api;
 })(typeof self !== "undefined" ? self : this, function () {
   "use strict";
 
-  const STORAGE_KEY = "commandpad:v1";
+  const STORAGE_KEY = "termstash:v1";
   const SCHEMA_VERSION = 1;
 
   const LIMITS = Object.freeze({

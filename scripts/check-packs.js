@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Validates and secret-scans every *.commandpad.json under the given paths
+// Validates and secret-scans every *.termstash.json under the given paths
 // (default: packs/). Run in CI on any repository that stores shared packs, so a
 // credential pasted into a team pack fails review before anyone imports it.
 // Exits 1 if any pack is invalid or contains a possible secret.
@@ -16,7 +16,7 @@ function findPackFiles(target) {
   return fs.readdirSync(target, { withFileTypes: true }).flatMap((entry) => {
     const full = path.join(target, entry.name);
     if (entry.isDirectory()) return entry.name === "node_modules" || entry.name.startsWith(".") ? [] : findPackFiles(full);
-    return entry.name.endsWith(".commandpad.json") ? [full] : [];
+    return entry.name.endsWith(".termstash.json") ? [full] : [];
   });
 }
 

@@ -2,7 +2,7 @@
 
 ## Context
 
-CommandPad stores commands people run against production systems. The saved
+TermStash stores commands people run against production systems. The saved
 text often includes hostnames and cluster names. Sometimes it includes
 credentials. It needs to be shareable with colleagues, work without a
 network, and be cheap to extend as adoption grows.

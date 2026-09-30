@@ -34,11 +34,11 @@ test("a built pack parses back to the same commands", () => {
   assert.equal(pack.commands[0].command, safe.command);
 });
 
-test("parse rejects files that are not CommandPad packs", () => {
+test("parse rejects files that are not TermStash packs", () => {
   assert.match(packs.parse("nope").errors[0], /not valid JSON/);
   assert.match(packs.parse("[]").errors[0], /JSON object/);
-  assert.match(packs.parse('{"format":"other"}').errors[0], /Not a CommandPad pack/);
-  assert.match(packs.parse('{"format":"commandpad-pack","version":2,"commands":[]}').errors[0], /Unsupported pack version/);
+  assert.match(packs.parse('{"format":"other"}').errors[0], /Not a TermStash pack/);
+  assert.match(packs.parse('{"format":"termstash-pack","version":2,"commands":[]}').errors[0], /Unsupported pack version/);
   assert.match(packs.parse("x".repeat(packs.MAX_PACK_BYTES + 1)).errors[0], /1 MB/);
 });
 

@@ -1,6 +1,6 @@
 {
-  "name": "CommandPad",
-  "short_name": "CommandPad",
+  "name": "TermStash",
+  "short_name": "TermStash",
   "description": "A notepad for the commands you use often but cannot remember.",
   "start_url": "./",
   "scope": "./",

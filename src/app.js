@@ -4,10 +4,10 @@
 (function () {
   "use strict";
 
-  const { placeholders, secrets, commands, packs, namer } = window.CommandPad;
+  const { placeholders, secrets, commands, packs, namer } = window.TermStash;
   // Built-in suggestions. They are read-only and never written to storage, so
   // they cannot clutter saved commands, exports or backups.
-  const catalog = window.CommandPad.catalog || [];
+  const catalog = window.TermStash.catalog || [];
   const CATALOG_RESULT_LIMIT = 40;
   // Share of a pasted command's words a suggestion must contain to count as similar.
   const SIMILARITY_THRESHOLD = 0.6;
@@ -701,7 +701,7 @@
     const selection = exportSelection();
     const { exportable, blocked } = packs.partitionForExport(selection);
     const name = $("export-name").value.trim() || "My commands";
-    download(`${slug(name)}.commandpad.json`, packs.serialize(packs.build(name, exportable)));
+    download(`${slug(name)}.termstash.json`, packs.serialize(packs.build(name, exportable)));
     // Only an export of everything that can be exported counts as a backup.
     if (exportable.length + blocked.length === state.commands.length) {
       state.lastBackupAt = Date.now();
@@ -796,7 +796,7 @@
   }
 
   function downloadRawData() {
-    download("commandpad-unreadable-data.json", rawUnreadableData || "");
+    download("termstash-unreadable-data.json", rawUnreadableData || "");
   }
 
   function isTyping(target) {
