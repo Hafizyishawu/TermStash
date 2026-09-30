@@ -13,6 +13,7 @@ const SHELL = [
   "manifest.webmanifest",
   "src/placeholders.js",
   "src/secrets.js",
+  "src/hidden.js",
   "src/commands.js",
   "src/packs.js",
   "src/namer.js",

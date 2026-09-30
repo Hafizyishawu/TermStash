@@ -120,7 +120,27 @@
     if (!parsed || parsed.version !== SCHEMA_VERSION || !Array.isArray(parsed.commands)) {
       return { state: null, error: `Saved data has an unsupported format (version ${parsed && parsed.version}).` };
     }
-    return { state: { ...emptyState(), ...parsed }, error: null };
+    const restored = parsed.commands.map(restoreCommand);
+    const unreadable = restored.filter((cmd) => cmd === null).length;
+    if (unreadable) {
+      return { state: null, error: `${unreadable} saved command(s) could not be read.` };
+    }
+    return { state: { ...emptyState(), ...parsed, commands: restored }, error: null };
+  }
+
+  // Fills fields that are safe to default so one old or partly written entry
+  // cannot crash rendering. An entry without a usable id, title or command
+  // cannot be repaired without guessing, so the whole load is refused instead.
+  function restoreCommand(entry) {
+    if (!entry || typeof entry !== "object") return null;
+    if (typeof entry.id !== "string" || typeof entry.title !== "string" || typeof entry.command !== "string") return null;
+    return {
+      ...entry,
+      description: typeof entry.description === "string" ? entry.description : "",
+      tags: normalizeTags(Array.isArray(entry.tags) ? entry.tags.filter((tag) => typeof tag === "string") : []),
+      copyCount: Number.isFinite(entry.copyCount) ? entry.copyCount : 0,
+      lastCopiedAt: Number.isFinite(entry.lastCopiedAt) ? entry.lastCopiedAt : null,
+    };
   }
 
   function save(storage, state) {

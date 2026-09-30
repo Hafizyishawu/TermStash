@@ -76,3 +76,16 @@ test("import plan marks duplicates and secrets", () => {
   assert.deepEqual(plan.map((p) => p.duplicate), [true, false, true, false]);
   assert.deepEqual(plan.map((p) => p.findings.length > 0), [false, false, false, true]);
 });
+
+test("import plan flags hidden characters so the preview can warn and leave them unchecked", () => {
+  const incoming = {
+    name: "p",
+    commands: [
+      { title: "clean", command: "ls -la", description: "", tags: [] },
+      { title: "tricky", command: "echo ok\rrm -rf ~", description: "", tags: [] },
+    ],
+  };
+  const plan = packs.planImport([], incoming);
+  assert.deepEqual(plan[0].hiddenCharacters, []);
+  assert.deepEqual(plan[1].hiddenCharacters.map((f) => f.code), ["U+000D"]);
+});

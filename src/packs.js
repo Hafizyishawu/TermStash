@@ -5,12 +5,12 @@
 (function (root, factory) {
   const deps =
     typeof module === "object" && module.exports
-      ? { commands: require("./commands.js"), secrets: require("./secrets.js") }
+      ? { commands: require("./commands.js"), secrets: require("./secrets.js"), hidden: require("./hidden.js") }
       : root.TermStash;
-  const api = factory(deps.commands, deps.secrets);
+  const api = factory(deps.commands, deps.secrets, deps.hidden);
   if (typeof module === "object" && module.exports) module.exports = api;
   else root.TermStash.packs = api;
-})(typeof self !== "undefined" ? self : this, function (commands, secrets) {
+})(typeof self !== "undefined" ? self : this, function (commands, secrets, hidden) {
   "use strict";
 
   const FORMAT = "termstash-pack";
@@ -118,7 +118,12 @@
       const key = commands.dedupeKey(cmd.command);
       const duplicate = existingKeys.has(key) || seenInPack.has(key);
       seenInPack.add(key);
-      return { command: cmd, duplicate, findings: findingsFor(cmd) };
+      return {
+        command: cmd,
+        duplicate,
+        findings: findingsFor(cmd),
+        hiddenCharacters: hidden.scan([cmd.title, cmd.command, cmd.description].join("\n")),
+      };
     });
   }
 

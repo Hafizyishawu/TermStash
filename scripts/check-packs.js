@@ -9,6 +9,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const packs = require("../src/packs.js");
 const secrets = require("../src/secrets.js");
+const hidden = require("../src/hidden.js");
 
 function findPackFiles(target) {
   const stat = fs.statSync(target);
@@ -23,11 +24,13 @@ function findPackFiles(target) {
 function checkFile(file) {
   const { pack, errors } = packs.parse(fs.readFileSync(file, "utf8"));
   if (errors.length) return errors;
-  return pack.commands.flatMap((cmd, index) =>
-    secrets
-      .scan([cmd.title, cmd.command, cmd.description].join("\n"))
-      .map((finding) => `command ${index + 1} ("${cmd.title}"): possible secret, ${finding.label}`),
-  );
+  return pack.commands.flatMap((cmd, index) => {
+    const text = [cmd.title, cmd.command, cmd.description].join("\n");
+    return [
+      ...secrets.scan(text).map((finding) => `command ${index + 1} ("${cmd.title}"): possible secret, ${finding.label}`),
+      ...hidden.scan(text).map((finding) => `command ${index + 1}: hidden character ${finding.code} (${finding.name}) x${finding.count}`),
+    ];
+  });
 }
 
 function main(argv) {

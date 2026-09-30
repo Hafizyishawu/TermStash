@@ -64,6 +64,28 @@ test("load round-trips saved state", () => {
   assert.deepEqual(commands.load(storage).state.commands, state.commands);
 });
 
+test("load repairs entries with missing optional fields so rendering cannot crash", () => {
+  const storage = memoryStorage({
+    [commands.STORAGE_KEY]: JSON.stringify({ version: 1, commands: [{ id: "a", title: "Logs", command: "kubectl logs", tags: ["K8s", 7] }, { id: "b", title: "t", command: "c" }] }),
+  });
+  const { state, error } = commands.load(storage);
+  assert.equal(error, null);
+  assert.deepEqual(state.commands[0].tags, ["k8s"]);
+  assert.deepEqual(state.commands[1].tags, []);
+  assert.equal(state.commands[1].description, "");
+  assert.equal(state.commands[1].copyCount, 0);
+  assert.doesNotThrow(() => commands.search(state.commands, "logs"));
+});
+
+test("load refuses entries it cannot repair and leaves the raw data in place", () => {
+  const raw = JSON.stringify({ version: 1, commands: [{ id: "a", title: "ok", command: "ls" }, { title: 5 }] });
+  const storage = memoryStorage({ [commands.STORAGE_KEY]: raw });
+  const { state, error } = commands.load(storage);
+  assert.equal(state, null);
+  assert.match(error, /1 saved command/);
+  assert.equal(storage.data[commands.STORAGE_KEY], raw);
+});
+
 test("load refuses corrupt or unknown data instead of discarding it", () => {
   const corrupt = memoryStorage({ [commands.STORAGE_KEY]: "{not json" });
   assert.equal(commands.load(corrupt).state, null);

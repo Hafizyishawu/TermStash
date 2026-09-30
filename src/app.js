@@ -4,7 +4,7 @@
 (function () {
   "use strict";
 
-  const { placeholders, secrets, commands, packs, namer } = window.TermStash;
+  const { placeholders, secrets, commands, packs, namer, hidden } = window.TermStash;
   // Built-in suggestions. They are read-only and never written to storage, so
   // they cannot clutter saved commands, exports or backups.
   const catalog = window.TermStash.catalog || [];
@@ -181,7 +181,9 @@
         // and first command line so they do not outrank the one-line match.
         const firstLine = entry.command.split("\n").find((line) => line.trim() && !line.trim().startsWith("#")) || "";
         const haystack = [entry.title, firstLine, entry.description, ...entry.tags].join("\n").toLowerCase();
-        const overlap = haystack.includes(program) ? terms.filter((term) => haystack.includes(term)).length / terms.length : 0;
+        const entryProgram = (firstLine.trim().split(/\s+/)[0] || "").toLowerCase();
+        const sameProgram = entryProgram === program || entry.tool === program;
+        const overlap = sameProgram ? terms.filter((term) => haystack.includes(term)).length / terms.length : 0;
         return { entry, overlap };
       })
       .filter(({ overlap }) => overlap >= SIMILARITY_THRESHOLD)
@@ -247,9 +249,19 @@
     $("result-count").textContent = [savedPart, suggestionPart].filter(Boolean).join(" · ");
   }
 
+  // Hidden characters are drawn as visible markers so what is shown matches
+  // what gets copied; the copied text itself is never altered.
+  function renderPlainText(text) {
+    return hidden.segments(text).map((segment) =>
+      segment.type === "hidden"
+        ? h("span", { className: "hidden-char", title: segment.name, text: `\u27e8${segment.code}\u27e9` })
+        : segment.value,
+    );
+  }
+
   function renderCommandText(command) {
-    return placeholders.segments(command).map((segment) =>
-      segment.type === "placeholder" ? h("span", { className: "ph", text: segment.value }) : segment.value,
+    return placeholders.segments(command).flatMap((segment) =>
+      segment.type === "placeholder" ? [h("span", { className: "ph", text: segment.value })] : renderPlainText(segment.value),
     );
   }
 
@@ -384,8 +396,11 @@
     banner.hidden = true;
   }
 
+  // Programmatic changes (Escape, tag clicks) replace what was pasted, so the
+  // pasted text must not linger as a draft row.
   function setSearch(value) {
     $("search").value = value;
+    pastedText = null;
     render();
   }
 
@@ -403,10 +418,11 @@
   // The async Clipboard API can stay pending while the browser waits on a
   // permission decision, so it is raced against a timeout before falling back.
   async function writeClipboard(text) {
+    let timer;
     try {
       await Promise.race([
         navigator.clipboard.writeText(text),
-        new Promise((_, reject) => setTimeout(() => reject(new Error("clipboard timeout")), CLIPBOARD_TIMEOUT_MS)),
+        new Promise((_, reject) => { timer = setTimeout(() => reject(new Error("clipboard timeout")), CLIPBOARD_TIMEOUT_MS); }),
       ]);
       return true;
     } catch {
@@ -418,6 +434,8 @@
       const ok = document.execCommand("copy");
       area.remove();
       return ok;
+    } finally {
+      clearTimeout(timer);
     }
   }
 
@@ -539,6 +557,19 @@
     }
     $("title-hint").hidden = !(lastSuggestedTitle && title.value === lastSuggestedTitle);
     renderSecretWarning($("editor-secret-warning"), secrets.scan(command));
+    renderHiddenWarning($("editor-hidden-warning"), hidden.scan(command));
+  }
+
+  function renderHiddenWarning(node, findings) {
+    if (!findings.length) {
+      node.hidden = true;
+      return;
+    }
+    node.replaceChildren(
+      h("strong", { text: `Contains hidden characters: ${findings.map((f) => `${f.code} ${f.name}`).join(", ")}.` }),
+      " They change what the command does without changing how it looks. Remove them unless you put them there on purpose.",
+    );
+    node.hidden = false;
   }
 
   function onTitleInput() {
@@ -590,8 +621,11 @@
         return;
       }
     }
+    // Another tab may have deleted the command while it was open here.
+    const existing = editingId ? findCommand(editingId) : null;
+    const deletedElsewhere = editingId && !existing;
     let savedId = editingId;
-    if (editingId) replaceCommand(commands.update(findCommand(editingId), input));
+    if (existing) replaceCommand(commands.update(existing, input));
     else {
       const created = commands.create(input);
       state.commands.push(created);
@@ -601,7 +635,7 @@
     selectedKey = `saved:${savedId}`;
     pastedText = null;
     markChanged();
-    toast(editingId ? "Saved" : "Added to your notepad");
+    toast(deletedElsewhere ? "It was deleted in another tab, so it was saved as a new command" : editingId ? "Saved" : "Added to your notepad");
   }
 
   function confirmAction({ heading, message, accept, cancel = "Cancel", danger = false }) {
@@ -702,8 +736,9 @@
     const { exportable, blocked } = packs.partitionForExport(selection);
     const name = $("export-name").value.trim() || "My commands";
     download(`${slug(name)}.termstash.json`, packs.serialize(packs.build(name, exportable)));
-    // Only an export of everything that can be exported counts as a backup.
-    if (exportable.length + blocked.length === state.commands.length) {
+    // Only an export containing every command counts as a backup; commands
+    // left out for looking like secrets would otherwise have no copy anywhere.
+    if (blocked.length === 0 && exportable.length === state.commands.length) {
       state.lastBackupAt = Date.now();
       state.changedSinceBackup = false;
       persist();
@@ -739,7 +774,7 @@
         type: "checkbox",
         id: `import-${index}`,
         "data-index": String(index),
-        checked: !item.duplicate && !item.findings.length,
+        checked: !item.duplicate && !item.findings.length && !item.hiddenCharacters.length,
         disabled: item.duplicate,
         onChange: updateImportButton,
       });
@@ -750,6 +785,7 @@
             item.command.title,
             item.duplicate ? h("span", { className: "badge-neutral", text: "Already saved" }) : null,
             item.findings.length ? h("span", { className: "badge-warn", text: `Possible secret: ${item.findings.map((f) => f.label).join(", ")}` }) : null,
+            item.hiddenCharacters.length ? h("span", { className: "badge-danger", text: `Hidden characters: ${item.hiddenCharacters.map((f) => `${f.code} \u00d7${f.count}`).join(", ")}` }) : null,
           ),
           h("pre", { className: "import-command mono" }, renderCommandText(item.command.command)),
         ),
@@ -825,6 +861,11 @@
       event.preventDefault();
       return true;
     }
+    const mod = hasModifier(event);
+    const key = event.key.toLowerCase();
+    const handled = key === "arrowdown" || key === "arrowup" || key === "enter" ||
+      (mod && (key === "e" || key === "s" || key === "backspace"));
+    if (!handled) return false;
     const item = selectedItem();
     if (event.key === "ArrowDown") moveSelection(1);
     else if (event.key === "ArrowUp") moveSelection(-1);
@@ -937,10 +978,15 @@
       button.addEventListener("click", () => button.closest("dialog").close());
     }
     // Clicking the backdrop closes a dialog, as people expect from a modal.
+    // A drag that starts inside a field and ends on the backdrop also fires
+    // a click on the dialog; only a press that starts on the backdrop closes it.
     for (const dialog of document.querySelectorAll("dialog")) {
+      let pressedOnBackdrop = false;
       dialog.addEventListener("close", () => { lastDialogClosedAt = performance.now(); });
+      dialog.addEventListener("pointerdown", (event) => { pressedOnBackdrop = event.target === dialog; });
       dialog.addEventListener("click", (event) => {
-        if (event.target === dialog) dialog.close();
+        if (pressedOnBackdrop && event.target === dialog) dialog.close();
+        pressedOnBackdrop = false;
       });
     }
   }

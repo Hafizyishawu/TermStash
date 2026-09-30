@@ -393,6 +393,25 @@ body {
 .row:not([aria-current="true"]):focus-within .row-actions { opacity: 1; pointer-events: auto; }
 .row:not([aria-current="true"]) .row-actions .btn-ghost { display: none; }
 
+.hidden-char {
+  padding: 0 3px;
+  font-size: 0.85em;
+  color: var(--danger);
+  background: var(--danger-soft);
+  border: 1px dashed var(--danger);
+  border-radius: 4px;
+  white-space: nowrap;
+}
+.badge-danger {
+  padding: 1px 6px;
+  font-size: var(--fs-2xs);
+  font-weight: 500;
+  color: var(--danger);
+  background: var(--danger-soft);
+  border: 1px solid var(--danger);
+  border-radius: 999px;
+}
+
 .badge-warn {
   padding: 1px 6px;
   font-size: var(--fs-2xs);
