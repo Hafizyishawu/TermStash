@@ -1,0 +1,36 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+    branches: [main]
+
+# Nothing in this pipeline writes to the repository.
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: "20"
+      - name: Syntax check
+        run: npm run check
+      - name: Unit tests, including detector and namer accuracy on labeled corpora
+        run: npm test
+      - name: Build the deployable site
+        # Also fails if the service worker precaches a file the site lacks.
+        run: npm run build
+      - name: Secret scan of shared packs
+        # A credential in a pack reaches everyone who imports it. This fails
+        # the build before that pack can be merged.
+        run: npm run check-packs

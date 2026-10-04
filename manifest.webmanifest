@@ -1,0 +1,13 @@
+{
+  "name": "TermStash",
+  "short_name": "TermStash",
+  "description": "A notepad for the commands you use often but cannot remember.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0f1216",
+  "theme_color": "#1f2328",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}
