@@ -1,0 +1,16 @@
+# Provider downloads and local working state.
+.terraform/
+# State lives in HCP Terraform; a local state file means something is wrong.
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+# Variable files may hold secrets; values belong in HCP workspace variables.
+*.tfvars
+*.tfvars.json
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
