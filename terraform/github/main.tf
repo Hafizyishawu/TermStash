@@ -159,3 +159,24 @@ resource "github_repository_environment_deployment_policy" "production_main" {
   environment    = github_repository_environment.production[0].environment
   branch_pattern = "main"
 }
+
+# Non-secret settings the deploy job reads. The Cloudflare token itself is an
+# environment secret set by hand: a value managed here would also be stored in
+# HCP state, a second copy to protect.
+resource "github_actions_environment_variable" "cloudflare_account_id" {
+  count = local.public ? 1 : 0
+
+  repository    = github_repository.termstash.name
+  environment   = github_repository_environment.production[0].environment
+  variable_name = "CLOUDFLARE_ACCOUNT_ID"
+  value         = var.cloudflare_account_id
+}
+
+resource "github_actions_environment_variable" "pages_project_name" {
+  count = local.public ? 1 : 0
+
+  repository    = github_repository.termstash.name
+  environment   = github_repository_environment.production[0].environment
+  variable_name = "PAGES_PROJECT_NAME"
+  value         = var.pages_project_name
+}

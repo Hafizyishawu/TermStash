@@ -1,0 +1,12 @@
+{
+  "name": "termstash-deploy",
+  "private": true,
+  "description": "Pins the Cloudflare Pages deploy tool. Kept apart from the app, which has no dependencies, so the deploy tool's dependency tree never reaches the site.",
+  "license": "FSL-1.1-ALv2",
+  "engines": {
+    "node": ">=22"
+  },
+  "devDependencies": {
+    "wrangler": "4.134.0"
+  }
+}

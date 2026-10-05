@@ -1,0 +1,81 @@
+name: deploy
+
+# Every merge to main builds and tests once, then waits for approval on the
+# protected production environment before anything is uploaded. Manual runs
+# redeploy main, for example after rotating the token.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: "22"
+      - name: Syntax check
+        run: npm run check
+      - name: Unit tests
+        run: npm test
+      - name: Secret and hidden-character scan of shared packs
+        run: npm run check-packs
+      - name: Build the deployable site
+        run: npm run build
+      # The deploy job uploads this exact artifact, so what goes live is what
+      # was tested here, not a rebuild.
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: site
+          path: dist/
+          if-no-files-found: error
+          retention-days: 30
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # The token is an environment secret, released only to jobs that pass the
+    # production approval and run from main.
+    environment:
+      name: production
+      url: https://termstash.app
+    # A deploy never cancels one in progress; a newer queued deploy replaces
+    # an older one still waiting, so the newest approved main wins.
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: "22"
+      - name: Install the pinned deploy tool
+        # Exact versions and integrity hashes from the lockfile. Install
+        # scripts are skipped: wrangler's Pages upload does not need them.
+        working-directory: deploy
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Confirm the deploy tool runs
+        run: deploy/node_modules/.bin/wrangler --version
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: site
+          path: dist
+      - name: Deploy to Cloudflare Pages
+        run: scripts/deploy-pages.sh dist
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          PAGES_PROJECT_NAME: ${{ vars.PAGES_PROJECT_NAME }}
+      - name: Verify the live site matches the build
+        run: scripts/verify-deploy.sh https://termstash.app dist
