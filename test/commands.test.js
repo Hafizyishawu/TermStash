@@ -95,3 +95,14 @@ test("load refuses corrupt or unknown data instead of discarding it", () => {
   const future = memoryStorage({ [commands.STORAGE_KEY]: JSON.stringify({ version: 99, commands: [] }) });
   assert.match(commands.load(future).error, /unsupported/);
 });
+
+test("load gives repeated ids a fresh id so edits cannot hit the wrong command", () => {
+  const storage = memoryStorage({
+    [commands.STORAGE_KEY]: JSON.stringify({ version: 1, commands: [{ id: "a", title: "one", command: "ls" }, { id: "a", title: "two", command: "pwd" }] }),
+  });
+  const { state, error } = commands.load(storage);
+  assert.equal(error, null);
+  assert.equal(state.commands.length, 2);
+  assert.equal(state.commands[0].id, "a");
+  assert.notEqual(state.commands[1].id, "a");
+});

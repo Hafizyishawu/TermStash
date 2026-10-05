@@ -7,5 +7,11 @@
   Strict-Transport-Security: max-age=63072000; includeSubDomains
   Cache-Control: no-cache
 
+# A service worker takes its CSP from the headers of its own script, not
+# from the page, so the site-wide connect-src 'none' would block the worker's
+# fetch and precache calls and break offline use. The worker gets its own
+# policy that allows only same-origin requests. Cache-Control is already set
+# by /* above.
 /sw.js
-  Cache-Control: no-cache
+  ! Content-Security-Policy
+  Content-Security-Policy: default-src 'none'; connect-src 'self'

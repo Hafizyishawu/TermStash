@@ -43,3 +43,9 @@ test("segments split literal text from placeholders for highlighting", () => {
     { type: "text", value: " c" },
   ]);
 });
+
+test("placeholders named after built-in Object properties are reported missing, not filled with function source", () => {
+  const { text, missing } = fill("echo {{constructor}} {{toString}}", {});
+  assert.equal(text, "echo  ");
+  assert.deepEqual(missing, ["constructor", "toString"]);
+});

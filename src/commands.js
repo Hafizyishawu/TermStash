@@ -125,6 +125,13 @@
     if (unreadable) {
       return { state: null, error: `${unreadable} saved command(s) could not be read.` };
     }
+    // Edits and deletes find a command by id, so a repeated id would make them
+    // act on the wrong entry. Later copies get a new id; both are kept.
+    const ids = new Set();
+    for (const cmd of restored) {
+      if (ids.has(cmd.id)) cmd.id = newId();
+      ids.add(cmd.id);
+    }
     return { state: { ...emptyState(), ...parsed, commands: restored }, error: null };
   }
 

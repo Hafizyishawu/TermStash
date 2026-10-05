@@ -25,7 +25,7 @@ function checkFile(file) {
   const { pack, errors } = packs.parse(fs.readFileSync(file, "utf8"));
   if (errors.length) return errors;
   return pack.commands.flatMap((cmd, index) => {
-    const text = [cmd.title, cmd.command, cmd.description].join("\n");
+    const text = packs.scannedText(cmd);
     return [
       ...secrets.scan(text).map((finding) => `command ${index + 1} ("${cmd.title}"): possible secret, ${finding.label}`),
       ...hidden.scan(text).map((finding) => `command ${index + 1}: hidden character ${finding.code} (${finding.name}) x${finding.count}`),

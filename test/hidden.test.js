@@ -58,3 +58,27 @@ test("no source file in the repository contains hidden characters", () => {
   walk(root);
   assert.deepEqual(offenders, []);
 });
+
+// Built from code points so this file stays free of the characters it tests.
+test("C1 controls, unusual spaces, fillers, selectors and tag characters are flagged", () => {
+  const points = [0x9b, 0xa0, 0xad, 0x115f, 0x1160, 0x1680, 0x2003, 0x202f, 0x205f, 0x206a, 0x3000, 0x3164, 0xfe0f, 0xffa0, 0xfffb, 0xe0041, 0xe0100];
+  for (const point of points) {
+    const findings = hidden.scan(`ls ${String.fromCodePoint(point)}x`);
+    assert.equal(findings.length, 1, point.toString(16));
+    assert.equal(findings[0].code, "U+" + point.toString(16).toUpperCase().padStart(4, "0"));
+    assert.notEqual(findings[0].name, "Control character", point.toString(16));
+  }
+});
+
+test("segments keep astral hidden characters whole", () => {
+  const tag = String.fromCodePoint(0xe0041);
+  const parts = hidden.segments(`a${tag}b`);
+  assert.deepEqual(parts.map((p) => p.value), ["a", tag, "b"]);
+  assert.deepEqual(hidden.segments(undefined), []);
+});
+
+test("an emoji presentation selector is allowed after an emoji but not after a letter", () => {
+  const warning = String.fromCodePoint(0x26a0, 0xfe0f);
+  assert.deepEqual(hidden.scan(`deploy ${warning} prod`), []);
+  assert.deepEqual(hidden.scan(`depl${String.fromCodePoint(0xfe0f)}oy`).map((f) => f.code), ["U+FE0F"]);
+});

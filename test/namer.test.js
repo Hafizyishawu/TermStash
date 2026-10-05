@@ -35,3 +35,27 @@ test("tokenizer keeps quoted operators inside words", () => {
   const tokens = tokenize("echo 'a | b' && ls");
   assert.deepEqual(tokens, [{ word: "echo" }, { word: "a | b" }, { op: "&&" }, { word: "ls" }]);
 });
+
+// Lookup tables are keyed by words from the command; inherited Object names
+// once crashed every render or produced function source as a title.
+test("program names that match built-in Object properties are treated as ordinary tools", () => {
+  assert.equal(suggestTitle("toString -a b"), "toString: -a b");
+  assert.equal(suggestTitle("constructor x"), "constructor: x");
+  assert.equal(suggestTitle("hasOwnProperty"), "hasOwnProperty");
+  assert.equal(suggestTitle("docker valueOf"), "docker: valueOf");
+});
+
+test("verbs missing their target are named without an undefined placeholder", () => {
+  for (const command of ["kubectl logs", "kubectl exec", "kubectl scale", "docker run", "docker exec", "docker logs"]) {
+    assert.doesNotMatch(suggestTitle(command), /undefined/, command);
+  }
+});
+
+test("curl -O takes no value but wget -O does", () => {
+  assert.match(suggestTitle("curl -O https://example.com/f.tgz"), /example\.com/);
+  assert.match(suggestTitle("wget -O out.tgz https://example.com/f.tgz"), /example\.com/);
+});
+
+test("timeout skips its valued options before the wrapped command", () => {
+  assert.equal(suggestTitle("timeout -s KILL 10 make build"), suggestTitle("make build"));
+});

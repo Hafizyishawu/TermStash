@@ -466,7 +466,7 @@
 
   function openFill(item, fields) {
     fillTarget = item;
-    const remembered = sessionValues.get(itemKey(item)) || {};
+    const remembered = sessionValues.get(itemKey(item)) || Object.create(null);
     $("fill-heading").textContent = item.cmd.title;
     const container = $("fill-fields");
     container.replaceChildren(...fields.map((field) => {
@@ -490,7 +490,8 @@
   }
 
   function fillValues() {
-    const values = {};
+    // Null prototype: a placeholder may be named "__proto__" or "constructor".
+    const values = Object.create(null);
     for (const input of $("fill-fields").querySelectorAll("input")) values[input.dataset.name] = input.value;
     return values;
   }
@@ -678,7 +679,7 @@
     });
     if (!proceed) return;
     state.commands = state.commands.filter((c) => c.id !== id);
-    sessionValues.delete(id);
+    sessionValues.delete(itemKey({ kind: "saved", cmd }));
     markChanged();
     toast("Deleted");
   }
@@ -756,7 +757,14 @@
       showImportErrors(file.name, ["Pack is larger than 1 MB."]);
       return;
     }
-    const { pack, errors } = packs.parse(await file.text());
+    let text;
+    try {
+      text = await file.text();
+    } catch {
+      showImportErrors(file.name, ["The file could not be read."]);
+      return;
+    }
+    const { pack, errors } = packs.parse(text);
     if (errors.length) {
       showImportErrors(file.name, errors);
       return;

@@ -24,7 +24,11 @@ function precachedPaths() {
   const source = fs.readFileSync(path.join(ROOT, "sw.js"), "utf8");
   const list = source.match(/const SHELL = \[([\s\S]*?)\];/);
   if (!list) throw new Error("could not find the SHELL list in sw.js");
-  return [...list[1].matchAll(/"([^"]+)"/g)].map((m) => m[1]).filter((p) => p !== "./");
+  const paths = [...list[1].matchAll(/"([^"]+)"/g)].map((m) => m[1]).filter((p) => p !== "./");
+  // An empty result means the list changed shape, not that nothing is
+  // precached; without this the missing-file check below would pass vacuously.
+  if (!paths.length) throw new Error("found no double-quoted paths in the sw.js SHELL list");
+  return paths;
 }
 
 fs.rmSync(OUT, { recursive: true, force: true });

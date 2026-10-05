@@ -90,6 +90,8 @@
     caffeinate: new Set(),
   };
 
+  const TIMEOUT_VALUED = new Set(["-s", "--signal", "-k", "--kill-after"]);
+
   function stripWrappers(words) {
     let rest = words.slice();
     for (;;) {
@@ -102,16 +104,24 @@
       const name = basename(head);
       if (name === "timeout") {
         let i = 1;
-        while (i < rest.length && rest[i].startsWith("-")) i++;
+        while (i < rest.length && rest[i].startsWith("-")) i += TIMEOUT_VALUED.has(rest[i]) ? 2 : 1;
         rest = rest.slice(i + 1);
         continue;
       }
-      if (!WRAPPERS[name]) return rest;
+      const valued = lookup(WRAPPERS, name);
+      if (!valued) return rest;
       let i = 1;
-      while (i < rest.length && rest[i].startsWith("-")) i += WRAPPERS[name].has(rest[i]) ? 2 : 1;
+      while (i < rest.length && rest[i].startsWith("-")) i += valued.has(rest[i]) ? 2 : 1;
       if (name === "env") while (i < rest.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(rest[i])) i++;
       rest = rest.slice(i);
     }
+  }
+
+  // Tables here are keyed by words taken from the command, so an inherited
+  // name such as "constructor" or "toString" must not resolve to a built-in
+  // Object method.
+  function lookup(table, key) {
+    return Object.hasOwn(table, key) ? table[key] : undefined;
   }
 
   function basename(path) {
@@ -188,17 +198,17 @@
         action = second ? `get ${first} ${second}` : `list ${first || "resources"}`;
         break;
       case "logs":
-        action = `logs for ${first}`;
+        action = first ? `logs for ${first}` : "logs";
         break;
       case "exec":
-        action = `exec into ${first}`;
+        action = first ? `exec into ${first}` : "exec";
         break;
       case "config":
         action = first === "use-context" && second ? `switch context to ${second}` : ["config", first, second].filter(Boolean).join(" ");
         break;
       case "scale": {
         const replicas = flag(flags, "--replicas");
-        action = `scale ${first}${replicas ? ` to ${show(replicas)}` : ""}`;
+        action = `scale ${first || "resource"}${replicas ? ` to ${show(replicas)}` : ""}`;
         break;
       }
       default:
@@ -226,12 +236,12 @@
     const actions = {
       ps: "list containers",
       images: "list images",
-      run: `run ${first}`,
-      exec: `exec into ${first}`,
-      logs: `logs for ${first}`,
+      run: first ? `run ${first}` : "run",
+      exec: first ? `exec into ${first}` : "exec",
+      logs: first ? `logs for ${first}` : "logs",
       build: `build ${show(flag(flags, "-t", "--tag")) || first || "."}`,
     };
-    return { action: actions[verb] || [verb, first].filter(Boolean).join(" "), qualifiers: [] };
+    return { action: lookup(actions, verb) || [verb, first].filter(Boolean).join(" "), qualifiers: [] };
   }
 
   function git(words) {
@@ -266,7 +276,7 @@
     const { positionals, flags } = parseArgs(words, new Set(["-X", "--request", "-H", "--header", "-d", "--data",
       "--data-raw", "--data-binary", "--data-urlencode", "-o", "--output", "-u", "--user", "-A", "--user-agent", "-e",
       "--cacert", "--cert", "--key", "-w", "--write-out", "-F", "--form", "--connect-timeout", "-m", "--max-time",
-      "--resolve", "--url", "-O", "--output-document"]));
+      "--resolve", "--url", ...(program === "wget" ? ["-O", "--output-document"] : [])]));
     const url = flag(flags, "--url") || positionals[0] || "";
     const target = show(url).replace(/^[a-z][a-z0-9+.-]*:\/\//i, "").replace(/[?#].*$/, "");
     if (program === "wget") return { action: `download ${target}`, qualifiers: [] };
@@ -390,9 +400,10 @@
   function describeSegment(words) {
     const program = basename(words[0]);
     const args = words.slice(1);
-    const handler = HANDLERS[program];
+    const handler = lookup(HANDLERS, program);
     if (handler) return { program, ...handler(args, program) };
-    if (SUBCOMMAND_TOOLS[program]) return { program, ...subcommandTool(args, SUBCOMMAND_TOOLS[program]) };
+    const subcommands = lookup(SUBCOMMAND_TOOLS, program);
+    if (subcommands) return { program, ...subcommandTool(args, subcommands) };
     return { program, action: args.slice(0, 3).map(show).join(" "), qualifiers: [] };
   }
 

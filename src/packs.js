@@ -18,8 +18,14 @@
   const MAX_PACK_BYTES = 1024 * 1024;
   const MAX_PACK_COMMANDS = 1000;
 
+  // Every field that is shown to the person importing a pack, so a secret or
+  // hidden character cannot ride in on a tag.
+  function scannedText(cmd) {
+    return [cmd.title, cmd.command, cmd.description, ...(cmd.tags || [])].join("\n");
+  }
+
   function findingsFor(cmd) {
-    return secrets.scan([cmd.title, cmd.command, cmd.description].join("\n"));
+    return secrets.scan(scannedText(cmd));
   }
 
   // Splits commands into those safe to share and those blocked, with reasons.
@@ -98,15 +104,14 @@
         tags: commands.normalizeTags(fields.tags),
       };
     });
+    const name = typeof data.name === "string" ? data.name.trim().slice(0, commands.LIMITS.titleLength) : "Untitled pack";
+    // The name heads the import preview, where a bidirectional override could
+    // make it read as something else.
+    const nameHidden = hidden.scan(name);
+    if (nameHidden.length) errors.push(`Pack name contains hidden characters (${nameHidden.map((f) => f.code).join(", ")}).`);
     if (errors.length) return { pack: null, errors };
 
-    return {
-      pack: {
-        name: typeof data.name === "string" ? data.name.trim().slice(0, commands.LIMITS.titleLength) : "Untitled pack",
-        commands: cleaned,
-      },
-      errors: [],
-    };
+    return { pack: { name, commands: cleaned }, errors: [] };
   }
 
   // Classifies each incoming command against what the user already has, so
@@ -122,7 +127,7 @@
         command: cmd,
         duplicate,
         findings: findingsFor(cmd),
-        hiddenCharacters: hidden.scan([cmd.title, cmd.command, cmd.description].join("\n")),
+        hiddenCharacters: hidden.scan(scannedText(cmd)),
       };
     });
   }
@@ -137,5 +142,6 @@
     serialize,
     parse,
     planImport,
+    scannedText,
   };
 });
