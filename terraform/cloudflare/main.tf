@@ -45,8 +45,52 @@ resource "cloudflare_dns_record" "apex" {
   depends_on = [cloudflare_pages_domain.apex]
 }
 
-# Only the listed certificate authorities may issue for this domain, so a
-# mis-issued certificate from any other CA is refused at issuance.
+# www exists only so the redirect rule below can answer for it. 192.0.2.1 is
+# a documentation address (RFC 5737) that routes nowhere, as in Cloudflare's
+# Pages www-redirect guide: the record must be proxied for the rule to run,
+# and nothing is ever served from the address.
+resource "cloudflare_dns_record" "www" {
+  zone_id = local.zone_id
+  name    = "www.${var.domain}"
+  type    = "A"
+  content = "192.0.2.1"
+  proxied = true
+  ttl     = 1
+  comment = "Redirect-only hostname; see cloudflare_ruleset.www_redirect. Managed by Terraform."
+}
+
+# One canonical address. www sends visitors to the apex permanently, keeping
+# the path and query string. A zone-level single redirect needs only the
+# zone's Single Redirect permission, where Bulk Redirects would need
+# account-level list permissions.
+resource "cloudflare_ruleset" "www_redirect" {
+  zone_id     = local.zone_id
+  name        = "www to apex"
+  description = "Managed by Terraform."
+  kind        = "zone"
+  phase       = "http_request_dynamic_redirect"
+
+  rules = [{
+    ref         = "www_to_apex"
+    description = "Redirect www.${var.domain} to https://${var.domain}"
+    expression  = "(http.host eq \"www.${var.domain}\")"
+    action      = "redirect"
+    action_parameters = {
+      from_value = {
+        status_code           = 301
+        preserve_query_string = true
+        target_url = {
+          expression = "concat(\"https://${var.domain}\", http.request.uri.path)"
+        }
+      }
+    }
+  }]
+}
+
+# Restricts which certificate authorities may issue for this domain, so a
+# mis-issued certificate from an unlisted CA is refused at issuance.
+# Cloudflare also adds the CAs behind its own Universal SSL to CAA answers at
+# query time; those are not records in the zone and never show as drift.
 resource "cloudflare_dns_record" "caa_issue" {
   for_each = toset(var.allowed_certificate_authorities)
 
