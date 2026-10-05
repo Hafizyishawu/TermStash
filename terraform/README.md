@@ -6,7 +6,7 @@ a dashboard; if a setting is missing from this directory, it is not managed.
 | Stack | Manages | HCP workspace |
 | --- | --- | --- |
 | `github/` | Repository settings, default-branch ruleset, production environment, vulnerability alerts | `termstash-github` |
-| `cloudflare/` | Pages project (Direct Upload), custom domain, DNS, CAA, DNSSEC, email anti-spoofing, zone TLS settings | `termstash-cloudflare` |
+| `cloudflare/` | Pages project (Direct Upload), custom domain, www redirect, DNS, CAA, DNSSEC, email anti-spoofing, zone TLS settings | `termstash-cloudflare` |
 
 Each stack has its own state and its own credential, so a mistake or a
 leaked token in one cannot change the other.
@@ -43,8 +43,9 @@ themselves. Codifying them with the `tfe` provider is a follow-up.
      limited to `TermStash`, with repository permissions Administration (read
      and write), Environments (read and write) and Metadata (read). Nothing
      else. Expiry 90 days.
-   - **Cloudflare**: a custom API token with Zone (read), DNS (edit) and Zone
-     Settings (edit), all limited to the `termstash.app` zone, plus Account
+   - **Cloudflare**: a custom API token with Zone (read), DNS (edit), Zone
+     Settings (edit) and Single Redirect (edit, for the www redirect), all
+     limited to the `termstash.app` zone, plus Account
      Cloudflare Pages (edit). DNS (edit) also covers DNSSEC; there is no
      separate DNSSEC permission. Set an expiry. Do not add an IP filter: runs
      on HCP Terraform's shared agents have no fixed, published egress range,
@@ -60,7 +61,9 @@ themselves. Codifying them with the `tfe` provider is a follow-up.
 1. Merge the application pull request first, so the `test` check exists on
    `main` before the ruleset requires it.
 2. Apply `cloudflare/`. Then confirm `dig +short termstash.app DS` returns a
-   record and `curl -sI https://termstash.app` responds.
+   record, `curl -sI https://termstash.app` responds, and
+   `curl -sI 'https://www.termstash.app/x?y=1'` returns 301 with
+   `location: https://termstash.app/x?y=1`.
 3. Apply `github/` while the repository is private: settings and alerts only,
    because GitHub Free offers rulesets and environments on public
    repositories only.
