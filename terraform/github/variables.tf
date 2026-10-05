@@ -12,8 +12,8 @@ variable "repository_name" {
 
 variable "repository_visibility" {
   type        = string
-  description = "Repository visibility. Changing this to public is irreversible for anything already pushed: complete the pre-publication check (G3.12) before applying it."
-  default     = "private"
+  description = "Repository visibility. Public since 2026-10-05, after the pre-publication check (G3.12) passed. Setting this back to private does not recall clones or forks made while public."
+  default     = "public"
 
   validation {
     condition     = contains(["private", "public"], var.repository_visibility)
