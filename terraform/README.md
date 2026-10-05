@@ -51,7 +51,10 @@ themselves. Codifying them with the `tfe` provider is a follow-up.
      on HCP Terraform's shared agents have no fixed, published egress range,
      so a filtered token fails every plan.
 3. Add workspace variables:
-   - `termstash-github`: environment variable `GITHUB_TOKEN`, sensitive.
+   - `termstash-github`: environment variable `GITHUB_TOKEN`, sensitive;
+     Terraform variable `cloudflare_account_id`, not sensitive, the same value
+     as `account_id` below. It becomes a variable on the `production`
+     environment for the deploy job.
    - `termstash-cloudflare`: environment variable `CLOUDFLARE_API_TOKEN`,
      sensitive; Terraform variable `account_id`, not sensitive.
 4. Record each token's expiry in the readiness plan's expiry tracking (G10.6).
@@ -102,6 +105,11 @@ gh api -X PUT repos/Hafizyishawu/TermStash/private-vulnerability-reporting
 ```bash
 gh api -X PUT repos/Hafizyishawu/TermStash/actions/permissions/fork-pr-contributor-approval -f approval_policy=all_external_contributors
 ```
+
+## Deploys
+
+Site deploys are not Terraform: the `deploy` workflow uploads each approved
+build of `main`. See `docs/runbooks/deploy-and-rollback.md`.
 
 ## Break-glass
 
