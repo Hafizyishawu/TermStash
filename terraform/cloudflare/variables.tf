@@ -16,7 +16,7 @@ variable "domain" {
 
 variable "pages_project_name" {
   type        = string
-  description = "Cloudflare Pages project name; also the *.pages.dev subdomain."
+  description = "Cloudflare Pages project name. The *.pages.dev subdomain is usually the same, but Cloudflare adds a suffix if the name is taken."
   default     = "termstash"
 
   validation {

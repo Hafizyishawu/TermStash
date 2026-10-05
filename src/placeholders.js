@@ -28,7 +28,9 @@
     const defaults = new Map(parse(command).map((p) => [p.name, p.defaultValue]));
     const missing = new Set();
     const text = command.replace(PLACEHOLDER_PATTERN, (_, name) => {
-      const provided = values[name];
+      // Placeholder names come from the command, so an inherited name such
+      // as "constructor" must not pick up a built-in Object property.
+      const provided = Object.hasOwn(values, name) ? values[name] : undefined;
       const value = provided !== undefined && provided !== "" ? provided : defaults.get(name);
       if (!value) missing.add(name);
       return value || "";

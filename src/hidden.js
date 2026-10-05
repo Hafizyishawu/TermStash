@@ -41,15 +41,46 @@
 
   // Tab and line feed are ordinary in commands, and so is CR when it is part
   // of a Windows CRLF line ending; everything else below U+0020 is flagged.
-  const PATTERN =
-    /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F\u061C\u180E\u200B-\u200F\u2028-\u202E\u2060-\u2064\u2066-\u2069\uFEFF]|\r(?!\n)/g;
+  // C1 controls matter because U+009B is an 8-bit terminal escape (CSI).
+  // Spaces other than U+0020 look like word separators but a shell does not
+  // split on them. Variation selectors and tag characters are invisible and
+  // can carry arbitrary hidden text; the two presentation selectors are
+  // allowed straight after an emoji, where they are part of how it renders.
+  const PATTERN = new RegExp(
+    "[\\u0000-\\u0008\\u000B\\u000C\\u000E-\\u001F\\u007F-\\u00A0\\u00AD\\u061C\\u115F\\u1160\\u1680\\u180E" +
+      "\\u2000-\\u200F\\u2028-\\u202F\\u205F-\\u206F\\u3000\\u3164\\uFE00-\\uFE0D\\uFEFF\\uFFA0\\uFFF9-\\uFFFB" +
+      "\\u{E0000}-\\u{E007F}\\u{E0100}-\\u{E01EF}]|(?<!\\p{Extended_Pictographic})[\\uFE0E\\uFE0F]|\\r(?!\\n)",
+    "gu",
+  );
+
+  const RANGES = [
+    [0x0080, 0x009f, "C1 control character"],
+    [0x00a0, 0x00a0, "No-break space"],
+    [0x00ad, 0x00ad, "Soft hyphen"],
+    [0x115f, 0x1160, "Hangul filler"],
+    [0x3164, 0x3164, "Hangul filler"],
+    [0xffa0, 0xffa0, "Hangul filler"],
+    [0x1680, 0x1680, "Non-ASCII space"],
+    [0x2000, 0x200a, "Non-ASCII space"],
+    [0x202f, 0x202f, "Non-ASCII space"],
+    [0x205f, 0x205f, "Non-ASCII space"],
+    [0x3000, 0x3000, "Non-ASCII space"],
+    [0x2065, 0x206f, "Invisible formatting character"],
+    [0xfe00, 0xfe0f, "Variation selector"],
+    [0xe0100, 0xe01ef, "Variation selector"],
+    [0xfff9, 0xfffb, "Interlinear annotation character"],
+    [0xe0000, 0xe007f, "Tag character"],
+  ];
 
   function codeLabel(char) {
     return "U+" + char.codePointAt(0).toString(16).toUpperCase().padStart(4, "0");
   }
 
   function describe(char) {
-    return NAMES[char.codePointAt(0)] || "Control character";
+    const point = char.codePointAt(0);
+    if (NAMES[point]) return NAMES[point];
+    const range = RANGES.find(([low, high]) => point >= low && point <= high);
+    return range ? range[2] : "Control character";
   }
 
   // Returns one entry per distinct character with how often it occurs.
@@ -68,6 +99,7 @@
   // Splits text into plain runs and hidden characters so the UI can show each
   // hidden character as a visible marker instead of letting it act on layout.
   function segments(text) {
+    if (typeof text !== "string") return [];
     const result = [];
     let cursor = 0;
     for (const match of text.matchAll(PATTERN)) {

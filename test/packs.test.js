@@ -89,3 +89,26 @@ test("import plan flags hidden characters so the preview can warn and leave them
   assert.deepEqual(plan[0].hiddenCharacters, []);
   assert.deepEqual(plan[1].hiddenCharacters.map((f) => f.code), ["U+000D"]);
 });
+
+test("hidden characters in tags are flagged on import", () => {
+  const rlo = String.fromCodePoint(0x202e);
+  const plan = packs.planImport([], { name: "p", commands: [{ title: "t", command: "ls", description: "", tags: [`k8s${rlo}`] }] });
+  assert.deepEqual(plan[0].hiddenCharacters.map((f) => f.code), ["U+202E"]);
+});
+
+test("parse rejects a pack whose name contains hidden characters", () => {
+  const text = JSON.stringify({
+    format: packs.FORMAT,
+    version: packs.FORMAT_VERSION,
+    name: `Team ${String.fromCodePoint(0x202e)}sdnammoc`,
+    commands: [{ title: "ok", command: "ls" }],
+  });
+  const { pack, errors } = packs.parse(text);
+  assert.equal(pack, null);
+  assert.deepEqual(errors, ["Pack name contains hidden characters (U+202E)."]);
+});
+
+test("secrets in tags block export", () => {
+  const tagged = commands.create({ title: "t", command: "ls", tags: ["token=" + "s3cretValue9"] });
+  assert.equal(packs.partitionForExport([tagged]).blocked.length, 1);
+});

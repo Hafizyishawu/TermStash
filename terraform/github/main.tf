@@ -117,6 +117,9 @@ resource "github_repository_ruleset" "default_branch" {
         for_each = var.required_status_checks
         content {
           context = required_check.value
+          # Only GitHub Actions can satisfy the check. Without this, anyone with
+          # write access could post a passing commit status of the same name.
+          integration_id = 15368
         }
       }
     }
@@ -139,8 +142,19 @@ resource "github_repository_environment" "production" {
     users = var.production_reviewers
   }
 
+  # protected_branches counts classic branch protection only, not rulesets,
+  # and GitHub lets every branch deploy when no classic rule exists. main is
+  # protected by a ruleset, so the branch is named explicitly instead.
   deployment_branch_policy {
-    protected_branches     = true
-    custom_branch_policies = false
+    protected_branches     = false
+    custom_branch_policies = true
   }
+}
+
+resource "github_repository_environment_deployment_policy" "production_main" {
+  count = local.public ? 1 : 0
+
+  repository     = github_repository.termstash.name
+  environment    = github_repository_environment.production[0].environment
+  branch_pattern = "main"
 }

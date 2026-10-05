@@ -14,9 +14,9 @@
 
 const fs = require("node:fs");
 const path = require("node:path");
-const placeholders = require("../src/placeholders.js");
 const secrets = require("../src/secrets.js");
 const commands = require("../src/commands.js");
+const hidden = require("../src/hidden.js");
 
 const OUTPUT = path.resolve(__dirname, "..", "src", "catalog.js");
 const LANGUAGES = new Set(["bash", "sh", "shell", "promql", "logql", "sql"]);
@@ -68,8 +68,14 @@ function parseArgs(argv) {
 
 function loadRules(file) {
   const raw = JSON.parse(fs.readFileSync(file, "utf8"));
+  if (!Array.isArray(raw.replacements) || !Array.isArray(raw.forbidden)) {
+    throw new Error(`${file}: expected "replacements" and "forbidden" arrays`);
+  }
+  // Every replacement is global: one that replaced only its first match would
+  // leave later occurrences of the identifier in place.
+  const global = (flags = "") => (flags.includes("g") ? flags : flags + "g");
   return {
-    replacements: raw.replacements.map((r) => ({ regex: new RegExp(r.pattern, r.flags || "g"), replacement: r.replacement })),
+    replacements: raw.replacements.map((r) => ({ regex: new RegExp(r.pattern, global(r.flags)), replacement: r.replacement })),
     forbidden: raw.forbidden.map((pattern) => new RegExp(pattern, "i")),
   };
 }
@@ -121,7 +127,7 @@ function extractBlocks(file) {
   let section = "";
   let prose = "";
   let fence = null;
-  for (const line of fs.readFileSync(file, "utf8").split("\n")) {
+  for (const line of fs.readFileSync(file, "utf8").split(/\r?\n/)) {
     const fenceMatch = line.match(/^```\s*([A-Za-z]*)\s*$/);
     if (fence) {
       if (fenceMatch && fenceMatch[1] === "") {
@@ -145,6 +151,8 @@ function extractBlocks(file) {
       prose = cleanProse(trimmed);
     }
   }
+  // An unclosed fence would otherwise drop its block without a word.
+  if (fence) throw new Error(`${file}: code fence opened in section "${fence.section}" is never closed`);
   return blocks;
 }
 
@@ -154,7 +162,10 @@ function buildEntries(source, rules) {
   const entries = [];
   for (const file of files) {
     const base = file.replace(/\.md$/, "");
-    const tool = TOOL_BY_FILE[base] || base.replace(/_reference$/, "");
+    // The tool name is published as a tag and comes from the filename, which
+    // the generalisation rules never see, so every file must be mapped here.
+    if (!Object.hasOwn(TOOL_BY_FILE, base)) throw new Error(`${file}: add it to TOOL_BY_FILE before building`);
+    const tool = TOOL_BY_FILE[base];
     for (const block of extractBlocks(path.join(source, file))) {
       if (!LANGUAGES.has(block.language)) continue;
       const command = convertAnglePlaceholders(generalise(block.command, rules)).replace(/\s+$/, "");
@@ -191,13 +202,15 @@ function verify(entries, rules) {
   const problems = [];
   const ids = new Set();
   for (const entry of entries) {
-    const text = [entry.title, entry.command, entry.description, entry.section].join("\n");
+    // Every published field is checked, not just the command: tool and tags
+    // come from filenames and titles from prose, and both ship publicly.
+    const text = [entry.title, entry.command, entry.description, entry.section, entry.tool, ...entry.tags].join("\n");
     for (const pattern of rules.forbidden) if (pattern.test(text)) problems.push(`${entry.id}: forbidden pattern ${pattern} in "${entry.title}"`);
-    for (const finding of secrets.scan(entry.command)) problems.push(`${entry.id}: possible secret (${finding.id}) in "${entry.title}"`);
+    for (const finding of secrets.scan(text)) problems.push(`${entry.id}: possible secret (${finding.id}) in "${entry.title}"`);
+    for (const finding of hidden.scan(text)) problems.push(`${entry.id}: hidden character ${finding.code} in "${entry.title}"`);
     for (const problem of commands.validate(entry)) problems.push(`${entry.id}: ${problem}`);
     if (ids.has(entry.id)) problems.push(`${entry.id}: duplicate id`);
     ids.add(entry.id);
-    placeholders.parse(entry.command);
   }
   return problems;
 }
@@ -228,7 +241,9 @@ function main() {
     console.error(`build-catalog: ${problems.length} problem(s); ${OUTPUT} was not written`);
     process.exit(1);
   }
-  fs.writeFileSync(OUTPUT, render(entries));
+  // Write then rename, so an interrupted build never leaves a truncated catalog.
+  fs.writeFileSync(`${OUTPUT}.tmp`, render(entries));
+  fs.renameSync(`${OUTPUT}.tmp`, OUTPUT);
   const byTool = entries.reduce((counts, e) => ({ ...counts, [e.tool]: (counts[e.tool] || 0) + 1 }), {});
   console.log(`build-catalog: ${entries.length} entries, ${entries.filter((e) => e.starter).length} starters`);
   console.log(Object.entries(byTool).map(([tool, count]) => `${tool}=${count}`).join(" "));

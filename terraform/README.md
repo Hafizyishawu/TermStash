@@ -46,8 +46,9 @@ themselves. Codifying them with the `tfe` provider is a follow-up.
    - **Cloudflare**: a custom API token with Zone (read), DNS (edit) and Zone
      Settings (edit), all limited to the `termstash.app` zone, plus Account
      Cloudflare Pages (edit). DNS (edit) also covers DNSSEC; there is no
-     separate DNSSEC permission. Set an expiry and, if your address is stable,
-     an IP filter for HCP Terraform's run addresses.
+     separate DNSSEC permission. Set an expiry. Do not add an IP filter: runs
+     on HCP Terraform's shared agents have no fixed, published egress range,
+     so a filtered token fails every plan.
 3. Add workspace variables:
    - `termstash-github`: environment variable `GITHUB_TOKEN`, sensitive.
    - `termstash-cloudflare`: environment variable `CLOUDFLARE_API_TOKEN`,
@@ -66,7 +67,15 @@ themselves. Codifying them with the `tfe` provider is a follow-up.
 4. After the pre-publication check passes, set `repository_visibility` to
    `public` in a pull request. That plan adds the ruleset, the production
    environment and secret scanning in the same apply that publishes the
-   repository, so it is never public without protection.
+   repository. The apply is not atomic: the repository turns public first,
+   and if a later resource fails it stays public with `main` unprotected.
+   Straight after the apply, confirm the `protections_active` output is
+   `true` and `gh api repos/Hafizyishawu/TermStash/rulesets` lists
+   `default-branch`. If either check fails, make the repository private in
+   the GitHub settings at once (break-glass), then open a pull request
+   setting `repository_visibility` back to `private`, or the next apply from
+   `main` makes it public again. Treat the time it was public as an
+   exposure: clones and forks made then cannot be recalled.
 
 ## Guard rails
 

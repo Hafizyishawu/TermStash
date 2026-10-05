@@ -1,9 +1,11 @@
 name: terraform
 
-# Runs on every push and pull request, with no path filter: this job is a
-# required status check, and a required check that is skipped blocks merges.
+# Runs on every pull request and every push to main, with no path filter:
+# this job is a required status check, and a required check that is skipped
+# blocks merges.
 on:
   push:
+    branches: [main]
   pull_request:
     branches: [main]
 
@@ -11,8 +13,11 @@ permissions:
   contents: read
 
 concurrency:
-  group: terraform-${{ github.ref }}
-  cancel-in-progress: true
+  # Superseded pull request runs are cancelled. On main each commit gets its
+  # own group, because GitHub keeps only one pending run per group and would
+  # otherwise drop a queued main run when a newer merge arrives.
+  group: terraform-${{ github.ref == 'refs/heads/main' && github.sha || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   terraform:

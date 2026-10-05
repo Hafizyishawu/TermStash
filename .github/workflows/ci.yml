@@ -1,7 +1,10 @@
 name: ci
 
+# Pull requests are tested through pull_request; push covers main after merge.
+# Running on every branch push as well would test each PR commit twice.
 on:
   push:
+    branches: [main]
   pull_request:
     branches: [main]
 
@@ -10,12 +13,16 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  # Superseded pull request runs are cancelled. On main each commit gets its
+  # own group, because GitHub keeps only one pending run per group and would
+  # otherwise drop a queued main run when a newer merge arrives.
+  group: ci-${{ github.ref == 'refs/heads/main' && github.sha || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:

@@ -5,7 +5,7 @@
   "description": "A notepad for the commands you use often but cannot remember.",
   "license": "FSL-1.1-ALv2",
   "engines": {
-    "node": ">=20"
+    "node": ">=20.1"
   },
   "scripts": {
     "test": "node --test test/*.test.js",

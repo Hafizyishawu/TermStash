@@ -62,6 +62,16 @@
       label: "Password, token or key passed as a flag",
       pattern: new RegExp(`--(?:password|passwd|token|api-key|secret)\\s+["']?${NOT_A_REFERENCE}(?!-)(?!id=)[^\\s"']{6,}`, "i"),
     },
+    {
+      // The MySQL clients take the password glued to -p, and sshpass takes it
+      // as the argument to -p. Case-sensitive: -P is the MySQL port.
+      id: "short-password-flag",
+      label: "Password passed with -p",
+      pattern: new RegExp(
+        `\\b(?:mysql|mysqldump|mysqladmin|mariadb)\\b[^\\n|;&]*\\s-p["']?${NOT_A_REFERENCE}[^\\s"']{4,}` +
+          `|\\bsshpass\\s+-p\\s*["']?${NOT_A_REFERENCE}[^\\s"']{4,}`,
+      ),
+    },
   ];
 
   function scan(text) {

@@ -5,7 +5,9 @@ data "cloudflare_zone" "site" {
 }
 
 locals {
-  zone_id = data.cloudflare_zone.site.zone_id
+  # id is the computed identifier; zone_id on this data source is an optional
+  # input that a filter lookup is not guaranteed to populate.
+  zone_id = data.cloudflare_zone.site.id
 }
 
 # Direct Upload project: no source block, so Cloudflare never builds or
@@ -37,6 +39,10 @@ resource "cloudflare_dns_record" "apex" {
   proxied = true
   ttl     = 1
   comment = "Cloudflare Pages: ${cloudflare_pages_project.site.name}. Managed by Terraform."
+
+  # Pages must know the custom domain before traffic arrives for it, or the
+  # apex serves errors until both exist.
+  depends_on = [cloudflare_pages_domain.apex]
 }
 
 # Only the listed certificate authorities may issue for this domain, so a

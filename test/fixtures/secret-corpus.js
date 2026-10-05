@@ -29,6 +29,9 @@ const positives = [
   `echo '{"api_key": "${join("a1b2c3d4", "e5f6g7h8")}"}' > config.json`,
   `echo '${join("-----BEGIN OPENSSH ", "PRIVATE KEY-----")}' > id_ed25519`,
   `vault login token=${join("hvs.", "CAESIabcdefghijklmnop")}`,
+  `mysql -u root -p${join("Hunter2", "Secret")} orders`,
+  `mysqldump -u app -p'${join("Hunter2", "Secret")}' orders > orders.sql`,
+  `sshpass -p ${join("Hunter2", "Secret")} ssh deploy@host`,
 ];
 
 const negatives = [
@@ -62,6 +65,11 @@ const negatives = [
   "docker build --secret id=mysecret,src=./secret.txt -t app .",
   "sed 's/password=[^ ]*/password=REDACTED/g' /var/log/application.log",
   "grep -v 'token=***' app.log",
+  'mysql -u root -p"$MYSQL_PASSWORD" orders',
+  "mysqldump -u app -p{{password}} orders > orders.sql",
+  "mysql -h db -P 3306 -u app -p orders",
+  "sshpass -f ~/.ssh/deploy-pass ssh deploy@host",
+  "sshpass -e ssh deploy@host",
 ];
 
 module.exports = [
