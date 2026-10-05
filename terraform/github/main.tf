@@ -12,6 +12,7 @@ import {
 }
 
 resource "github_repository" "termstash" {
+  #checkov:skip=CKV_GIT_1:Public by decision (ADR 0002, FSL licence). Made public after the pre-publication history scan; protections below are gated on it.
   #checkov:skip=CKV_GIT_3:Vulnerability alerts are enabled by github_repository_vulnerability_alerts below, the provider's replacement for this resource's deprecated attribute.
   name         = var.repository_name
   description  = "A local-first notepad for the commands you use often but cannot remember."
