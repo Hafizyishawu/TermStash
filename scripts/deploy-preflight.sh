@@ -6,6 +6,11 @@
 #
 # The Cloudflare token is a production environment secret, which only the
 # approved deploy job can read; deploy-pages.sh checks it there.
+#
+# The deploy job runs this again with EXPECTED_CLOUDFLARE_ACCOUNT_ID and
+# EXPECTED_PAGES_PROJECT_NAME set to what the build job checked. A production
+# environment variable of the same name would override the repository value
+# in the deploy job only, so a mismatch fails the deploy before any upload.
 set -euo pipefail
 
 failures=0
@@ -42,8 +47,22 @@ else
   echo "deploy-preflight: ok   build commit matches GITHUB_SHA"
 fi
 
+for name in CLOUDFLARE_ACCOUNT_ID PAGES_PROJECT_NAME; do
+  expected_name="EXPECTED_$name"
+  if [[ -n "${!expected_name:-}" && "${!expected_name}" != "${!name:-}" ]]; then
+    echo "deploy-preflight: $name differs from the value the build job checked; remove any production environment variable named $name" >&2
+    failures=$((failures + 1))
+  fi
+done
+
 if (( failures )); then
-  echo "deploy-preflight: $failures problem(s); not requesting a production approval" >&2
+  echo "deploy-preflight: $failures problem(s); stopping before any approval or upload" >&2
   exit 1
+fi
+if [[ -n "${GITHUB_OUTPUT:-}" ]]; then
+  {
+    echo "cloudflare_account_id=$CLOUDFLARE_ACCOUNT_ID"
+    echo "pages_project_name=$PAGES_PROJECT_NAME"
+  } >> "$GITHUB_OUTPUT"
 fi
 echo "deploy-preflight: ready to deploy"
