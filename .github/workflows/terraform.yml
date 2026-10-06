@@ -41,6 +41,10 @@ jobs:
         # tags versions, so "latest release" points at checkov 2.0.930. Pin by
         # tag, and prefer a tag that has been out for a few weeks.
         uses: bridgecrewio/checkov-action@444c9db6fa75e2d9c19ebf1fde7322089be9009e # v12.3125.0 (checkov 3.3.19)
+        # A file checkov cannot parse is skipped, and the scan still passes
+        # unless this is set: an unscanned file must fail the job.
+        env:
+          CKV_PARSE_ERROR_FAIL: "true"
         with:
           directory: terraform
           framework: terraform
