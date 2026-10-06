@@ -7,16 +7,17 @@ a dashboard; if a setting is missing from this directory, it is not managed.
 | --- | --- | --- |
 | `github/` | Repository settings, default-branch ruleset, production environment, vulnerability alerts | `termstash-github` |
 | `cloudflare/` | Pages project (Direct Upload), custom domain, www redirect, DNS, CAA, DNSSEC, email anti-spoofing, zone TLS settings | `termstash-cloudflare` |
+| `monitoring/` | Grafana Cloud uptime check, availability SLO with burn-rate alerts, certificate and missing-data alert, email contact point | `termstash-monitoring` |
 
 Each stack has its own state and its own credential, so a mistake or a
-leaked token in one cannot change the other.
+leaked token in one cannot change another.
 
 ## State and runs
 
 State lives in HCP Terraform. The organisation is read from
 `TF_CLOUD_ORGANIZATION`; no account identifier is committed.
 
-Both workspaces are VCS-driven, with auto-apply off:
+All workspaces are VCS-driven, with auto-apply off:
 
 - A pull request touching a stack triggers a speculative plan, posted to the
   pull request as a check.
@@ -32,12 +33,13 @@ it plus checkov on every push and pull request.
 These steps create the workspaces and credentials, which cannot manage
 themselves. Codifying them with the `tfe` provider is a follow-up.
 
-1. In HCP Terraform, create the organisation if needed, then two workspaces
-   using the version control workflow on this repository:
+1. In HCP Terraform, create the organisation if needed, then three
+   workspaces using the version control workflow on this repository:
    - `termstash-github`, working directory `terraform/github`
    - `termstash-cloudflare`, working directory `terraform/cloudflare`
+   - `termstash-monitoring`, working directory `terraform/monitoring`
    Set the trigger to the workspace's working directory, and turn auto-apply
-   off on both.
+   off on all of them.
 2. Create the credentials, each with the minimum access and an expiry:
    - **GitHub**: a fine-grained personal access token, repository access
      limited to `TermStash`, with repository permissions Administration (read
@@ -50,6 +52,13 @@ themselves. Codifying them with the `tfe` provider is a follow-up.
      separate DNSSEC permission. Set an expiry. Do not add an IP filter: runs
      on HCP Terraform's shared agents have no fixed, published egress range,
      so a filtered token fails every plan.
+   - **Grafana Cloud**: in the stack, a service account with the Editor role
+     (enough for checks, SLOs, alert rules and contact points; not Admin) and
+     a token with a 90-day expiry. Separately, a Synthetic Monitoring access
+     token from Synthetics, Config, after initialising Synthetic Monitoring;
+     set a 90-day expiry if offered, otherwise record its creation date and
+     rotate it on the same schedule.
+     No account-level access policy token is needed.
 3. Add workspace variables:
    - `termstash-github`: environment variable `GITHUB_TOKEN`, sensitive;
      Terraform variable `cloudflare_account_id`, not sensitive, the same value
@@ -57,6 +66,10 @@ themselves. Codifying them with the `tfe` provider is a follow-up.
      workflow checks before asking for approval.
    - `termstash-cloudflare`: environment variable `CLOUDFLARE_API_TOKEN`,
      sensitive; Terraform variable `account_id`, not sensitive.
+   - `termstash-monitoring`: environment variables `GRAFANA_AUTH` and
+     `GRAFANA_SM_ACCESS_TOKEN`, sensitive; Terraform variables `grafana_url`
+     and `sm_url`, not sensitive, and `alert_email`, sensitive so the address
+     stays out of this public repository and its plan output.
 4. Record each token's expiry in the readiness plan's expiry tracking (G10.6).
 
 ## Apply order
