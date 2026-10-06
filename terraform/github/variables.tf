@@ -58,6 +58,7 @@ variable "cloudflare_account_id" {
   type        = string
   description = "Cloudflare account the deploy job uploads to. Not a secret; the same value as account_id in the cloudflare workspace."
 
+  # Same pattern as scripts/deploy-preflight.sh; change both together.
   validation {
     condition     = can(regex("^[0-9a-f]{32}$", var.cloudflare_account_id))
     error_message = "cloudflare_account_id must be a 32-character lowercase hex Cloudflare account ID."
@@ -69,6 +70,7 @@ variable "pages_project_name" {
   description = "Cloudflare Pages project the deploy job uploads to. Copied from pages_project_name in the cloudflare workspace rather than read from its outputs, which would need an HCP token here; a mismatch fails the deploy's verify step."
   default     = "termstash"
 
+  # Same pattern as scripts/deploy-preflight.sh; change both together.
   validation {
     condition     = can(regex("^[a-z0-9][a-z0-9-]{0,56}[a-z0-9]$", var.pages_project_name))
     error_message = "pages_project_name must be lowercase letters, digits and hyphens, 2 to 58 characters."

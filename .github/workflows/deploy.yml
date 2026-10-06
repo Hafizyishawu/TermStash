@@ -22,6 +22,11 @@ jobs:
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: "22"
+      - name: Check the deploy settings before any approval is requested
+        run: scripts/deploy-preflight.sh
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          PAGES_PROJECT_NAME: ${{ vars.PAGES_PROJECT_NAME }}
       - name: Syntax check
         run: npm run check
       - name: Unit tests
