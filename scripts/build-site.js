@@ -5,6 +5,10 @@
 // Fails if anything the service worker precaches is missing from the output,
 // because a missing file makes the worker's install step fail silently in the
 // browser and the site then never works offline.
+//
+//   node scripts/build-site.js          build dist/
+//   node scripts/build-site.js --list   print every file the build produces,
+//                                       which the deploy checks it received
 "use strict";
 
 const fs = require("node:fs");
@@ -31,9 +35,18 @@ function precachedPaths() {
   return paths;
 }
 
+function siteFiles() {
+  const scripts = fs.readdirSync(path.join(ROOT, "src")).filter((file) => file.endsWith(".js")).sort();
+  return [...SITE_FILES, ...scripts.map((file) => `src/${file}`)];
+}
+
+if (process.argv.includes("--list")) {
+  console.log(siteFiles().join("\n"));
+  process.exit(0);
+}
+
 fs.rmSync(OUT, { recursive: true, force: true });
-for (const file of SITE_FILES) copy(file);
-for (const file of fs.readdirSync(path.join(ROOT, "src"))) if (file.endsWith(".js")) copy(path.join("src", file));
+for (const file of siteFiles()) copy(file);
 
 const missing = precachedPaths().filter((p) => !fs.existsSync(path.join(OUT, p)));
 if (missing.length) {
