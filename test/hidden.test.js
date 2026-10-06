@@ -42,14 +42,14 @@ test("no source file in the repository contains hidden characters", () => {
   const fs = require("node:fs");
   const path = require("node:path");
   const root = path.resolve(__dirname, "..");
-  const skip = new Set([".git", "node_modules", "dist"]);
+  const skip = new Set([".git", "node_modules", "dist", ".terraform"]);
   const offenders = [];
   const walk = (dir) => {
     for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
       if (skip.has(entry.name)) continue;
       const full = path.join(dir, entry.name);
       if (entry.isDirectory()) walk(full);
-      else if (/\.(js|mjs|json|html|css|md|yml|yaml|svg|webmanifest)$|^_headers$|^LICENSE$/.test(entry.name)) {
+      else if (/\.(js|mjs|json|html|css|md|yml|yaml|svg|webmanifest|txt|tf|sh)$|^_headers$|^LICENSE$/.test(entry.name)) {
         const findings = hidden.scan(fs.readFileSync(full, "utf8"));
         if (findings.length) offenders.push(`${path.relative(root, full)}: ${findings.map((f) => f.code).join(", ")}`);
       }

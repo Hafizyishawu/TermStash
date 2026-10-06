@@ -167,6 +167,7 @@ body {
   transition: background var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out),
     border-color var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out);
 }
+a.btn { text-decoration: none; }
 .btn:active { transform: translateY(1px); }
 .btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
 .btn-primary { color: var(--accent-ink); background: var(--accent); }
