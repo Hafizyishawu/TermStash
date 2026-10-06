@@ -15,6 +15,9 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    outputs:
+      cloudflare_account_id: ${{ steps.preflight.outputs.cloudflare_account_id }}
+      pages_project_name: ${{ steps.preflight.outputs.pages_project_name }}
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
@@ -23,6 +26,7 @@ jobs:
         with:
           node-version: "22"
       - name: Check the deploy settings before any approval is requested
+        id: preflight
         run: scripts/deploy-preflight.sh
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
@@ -76,6 +80,13 @@ jobs:
         with:
           name: site
           path: dist
+      - name: Confirm the settings are the ones the build job checked
+        run: scripts/deploy-preflight.sh
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          PAGES_PROJECT_NAME: ${{ vars.PAGES_PROJECT_NAME }}
+          EXPECTED_CLOUDFLARE_ACCOUNT_ID: ${{ needs.build.outputs.cloudflare_account_id }}
+          EXPECTED_PAGES_PROJECT_NAME: ${{ needs.build.outputs.pages_project_name }}
       - name: Deploy to Cloudflare Pages
         run: scripts/deploy-pages.sh dist
         env:

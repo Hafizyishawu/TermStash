@@ -164,31 +164,9 @@ resource "github_repository_environment_deployment_policy" "production_main" {
 # production environment variables, so the build job can check them before
 # the approval wait: a deploy that cannot succeed fails without asking for an
 # approval. The Cloudflare token stays an environment secret, set by hand,
-# because a value managed here would also be stored in HCP state.
-#
-# The environment variables of the same names stay for one change, so no
-# single apply can leave neither set. In the deploy job an environment
-# variable overrides a repository variable of the same name, so a deploy
-# proves nothing about the repository copies: remove these in the next change,
-# once gh variable list shows both repository variables.
-resource "github_actions_environment_variable" "cloudflare_account_id" {
-  count = local.public ? 1 : 0
-
-  repository    = github_repository.termstash.name
-  environment   = github_repository_environment.production[0].environment
-  variable_name = "CLOUDFLARE_ACCOUNT_ID"
-  value         = var.cloudflare_account_id
-}
-
-resource "github_actions_environment_variable" "pages_project_name" {
-  count = local.public ? 1 : 0
-
-  repository    = github_repository.termstash.name
-  environment   = github_repository_environment.production[0].environment
-  variable_name = "PAGES_PROJECT_NAME"
-  value         = var.pages_project_name
-}
-
+# because a value managed here would also be stored in HCP state. A
+# production environment variable of the same name would override these in
+# the deploy job; the deploy job's preflight fails if that happens.
 resource "github_actions_variable" "cloudflare_account_id" {
   repository    = github_repository.termstash.name
   variable_name = "CLOUDFLARE_ACCOUNT_ID"

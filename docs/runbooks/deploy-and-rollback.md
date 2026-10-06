@@ -10,9 +10,13 @@
 3. The `deploy` job waits on the `production` environment. Approve it from the
    workflow run page (Review deployments). Only runs from `main` can be
    approved.
-4. `scripts/deploy-pages.sh` uploads the artifact with wrangler, pinned in
+4. Before uploading, the deploy job runs the preflight again and stops if the
+   account ID or project name differs from what the build job checked, which
+   would mean a production environment variable is overriding the
+   repository one.
+5. `scripts/deploy-pages.sh` uploads the artifact with wrangler, pinned in
    `deploy/package-lock.json`, tagged with the commit SHA and message.
-5. `scripts/verify-deploy.sh` fails the run unless every built file is served
+6. `scripts/verify-deploy.sh` fails the run unless every built file is served
    byte for byte at https://termstash.app and the security headers are in
    force, including the service worker's own CSP.
 
@@ -50,10 +54,7 @@ merges, the next deploy from `main` brings the bad version back.
 
 `CLOUDFLARE_API_TOKEN` on the `production` environment is the only deploy
 value set by hand; the account ID and project name are repository variables
-managed in `terraform/github`, readable by the build job's preflight. Until
-the follow-up change removes them, production environment variables of the
-same names also exist and take precedence in the deploy job; keep both equal.
-The
+managed in `terraform/github`, readable by the build job's preflight. The
 token has Account, Cloudflare Pages, Edit, on this account only, and nothing
 else: it can publish a build but cannot change DNS, TLS or redirects.
 
