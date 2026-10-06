@@ -19,10 +19,12 @@ sha256() {
   if command -v sha256sum >/dev/null; then sha256sum | cut -d' ' -f1; else shasum -a 256 | cut -d' ' -f1; fi
 }
 
-# Pages serves index.html at the directory URL and consumes _headers itself.
+# Pages serves index.html at the directory URL, consumes _headers itself, and
+# serves 404.html, with a 404 status, for any path that does not exist.
 url_path() {
   case "$1" in
     index.html) echo "/" ;;
+    404.html) echo "/no-such-page" ;;
     _headers) echo "" ;;
     *) echo "/$1" ;;
   esac
@@ -34,7 +36,11 @@ mismatched_files() {
     path="$(url_path "$file")"
     [[ -z "$path" ]] && continue
     expected="$(sha256 < "$site_dir/$file")"
-    actual="$(curl -fsSL --compressed --max-time 15 "$base_url$path?$bust" | sha256 || true)"
+    if [[ "$file" == "404.html" ]]; then
+      actual="$(curl -sSL --compressed --max-time 15 "$base_url$path?$bust" | sha256 || true)"
+    else
+      actual="$(curl -fsSL --compressed --max-time 15 "$base_url$path?$bust" | sha256 || true)"
+    fi
     [[ "$expected" == "$actual" ]] || echo "$file"
   done < <(cd "$site_dir" && find . -type f | sed 's|^\./||' | sort)
 }
@@ -78,6 +84,11 @@ require "page is revalidated on every visit" "$(header / cache-control)" "no-cac
 # The worker's own policy must replace the page policy, not add to it, or its
 # fetches are blocked and the site never works offline.
 require "service worker has its own same-origin CSP" "$(header /sw.js content-security-policy)" "^default-src 'none'; connect-src 'self'$"
+# Without 404.html, Pages answers every unknown path with the app and a 200.
+unknown_status="$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "$base_url/no-such-page-$bust" || true)"
+require "unknown paths return 404" "$unknown_status" "^404$"
+# RFC 9116 requires security.txt to be served as text/plain.
+require "security.txt is served as plain text" "$(header /.well-known/security.txt content-type)" "^text/plain"
 
 if (( failures )); then
   echo "verify-deploy: $failures header check(s) failed" >&2

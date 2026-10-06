@@ -12,7 +12,7 @@ const path = require("node:path");
 
 const ROOT = path.resolve(__dirname, "..");
 const OUT = path.join(ROOT, "dist");
-const SITE_FILES = ["index.html", "app.css", "icon.svg", "manifest.webmanifest", "sw.js", "_headers"];
+const SITE_FILES = ["index.html", "app.css", "icon.svg", "manifest.webmanifest", "sw.js", "_headers", "404.html", ".well-known/security.txt"];
 
 function copy(relative) {
   const destination = path.join(OUT, relative);

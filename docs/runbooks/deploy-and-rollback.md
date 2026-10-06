@@ -102,3 +102,19 @@ The deploy that follows the merge verifies only that the files now live are
 the tested build. It cannot show what the deploy tool did with the token
 while it ran, so if a release is later found to be compromised, roll back
 and rotate the token as well.
+
+## Renewing security.txt
+
+`.well-known/security.txt` carries an `Expires` date, about six months out.
+The weekly `scheduled-checks` workflow fails once it is within 30 days, and
+GitHub emails the failure. Pull requests and deploys only show a warning, so
+a hotfix is never blocked by the date. GitHub disables schedules in a public
+repository after 60 days without activity, and emails before it does; the
+renewal date is also tracked with the other expiries.
+
+To renew:
+
+1. On a branch, set `Expires` to about six months ahead (RFC 3339, UTC, for
+   example `2027-10-07T00:00:00.000Z`), keeping it under a year.
+2. Merge and approve the deploy; the verify step confirms the new file is
+   live and served as plain text.
