@@ -160,9 +160,17 @@ resource "github_repository_environment_deployment_policy" "production_main" {
   branch_pattern = "main"
 }
 
-# Non-secret settings the deploy job reads. The Cloudflare token itself is an
-# environment secret set by hand: a value managed here would also be stored in
-# HCP state, a second copy to protect.
+# Non-secret settings the deploy reads. They are repository variables, not
+# production environment variables, so the build job can check them before
+# the approval wait: a deploy that cannot succeed fails without asking for an
+# approval. The Cloudflare token stays an environment secret, set by hand,
+# because a value managed here would also be stored in HCP state.
+#
+# The environment variables of the same names stay for one change, so no
+# single apply can leave neither set. In the deploy job an environment
+# variable overrides a repository variable of the same name, so a deploy
+# proves nothing about the repository copies: remove these in the next change,
+# once gh variable list shows both repository variables.
 resource "github_actions_environment_variable" "cloudflare_account_id" {
   count = local.public ? 1 : 0
 
@@ -177,6 +185,18 @@ resource "github_actions_environment_variable" "pages_project_name" {
 
   repository    = github_repository.termstash.name
   environment   = github_repository_environment.production[0].environment
+  variable_name = "PAGES_PROJECT_NAME"
+  value         = var.pages_project_name
+}
+
+resource "github_actions_variable" "cloudflare_account_id" {
+  repository    = github_repository.termstash.name
+  variable_name = "CLOUDFLARE_ACCOUNT_ID"
+  value         = var.cloudflare_account_id
+}
+
+resource "github_actions_variable" "pages_project_name" {
+  repository    = github_repository.termstash.name
   variable_name = "PAGES_PROJECT_NAME"
   value         = var.pages_project_name
 }

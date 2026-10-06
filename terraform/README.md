@@ -41,8 +41,8 @@ themselves. Codifying them with the `tfe` provider is a follow-up.
 2. Create the credentials, each with the minimum access and an expiry:
    - **GitHub**: a fine-grained personal access token, repository access
      limited to `TermStash`, with repository permissions Administration (read
-     and write), Environments (read and write) and Metadata (read). Nothing
-     else. Expiry 90 days.
+     and write), Environments (read and write), Variables (read and write)
+     and Metadata (read). Nothing else. Expiry 90 days.
    - **Cloudflare**: a custom API token with Zone (read), DNS (edit), Zone
      Settings (edit) and Single Redirect (edit, for the www redirect), all
      limited to the `termstash.app` zone, plus Account
@@ -53,8 +53,8 @@ themselves. Codifying them with the `tfe` provider is a follow-up.
 3. Add workspace variables:
    - `termstash-github`: environment variable `GITHUB_TOKEN`, sensitive;
      Terraform variable `cloudflare_account_id`, not sensitive, the same value
-     as `account_id` below. It becomes a variable on the `production`
-     environment for the deploy job.
+     as `account_id` below. It becomes a repository variable the deploy
+     workflow checks before asking for approval.
    - `termstash-cloudflare`: environment variable `CLOUDFLARE_API_TOKEN`,
      sensitive; Terraform variable `account_id`, not sensitive.
 4. Record each token's expiry in the readiness plan's expiry tracking (G10.6).
@@ -94,16 +94,13 @@ themselves. Codifying them with the `tfe` provider is a follow-up.
 
 ## Not yet codified
 
-The GitHub provider has no resource for these repository settings. Until it
-does, apply them with the API after the repository goes public, and recheck
-them in the week-1 review:
+The GitHub provider has no resource for private vulnerability reporting or
+for the fork pull request workflow approval policy. `scripts/github-repo-settings.sh`
+applies both, changing only what differs. Run it with `--dry-run` first, and
+again in the week-1 review to catch drift:
 
 ```bash
-gh api -X PUT repos/Hafizyishawu/TermStash/private-vulnerability-reporting
-```
-
-```bash
-gh api -X PUT repos/Hafizyishawu/TermStash/actions/permissions/fork-pr-contributor-approval -f approval_policy=all_external_contributors
+scripts/github-repo-settings.sh --dry-run
 ```
 
 ## Deploys
