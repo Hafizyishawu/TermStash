@@ -9,7 +9,10 @@
    builds `dist/`, and stores it as the `site` artifact.
 3. The `deploy` job waits on the `production` environment. Approve it from the
    workflow run page (Review deployments). Only runs from `main` can be
-   approved.
+   approved. A deploy you do not want must be rejected or its run cancelled:
+   one left waiting holds the single deploy slot, so the next deploy queues
+   behind it (GitHub keeps only the newest queued one and cancels older
+   ones).
 4. Before uploading, the deploy job runs the preflight again and stops if the
    account ID or project name differs from what the build job checked, which
    would mean a production environment variable is overriding the
@@ -72,6 +75,10 @@ did not approve and roll back any.
 
 ## When a deploy fails
 
+- **Deploy step, site is missing files:** the artifact lost files between
+  the build and the deploy job, for example hidden directories. Nothing was
+  uploaded. Fix the upload step in a pull request; its merge builds a fresh
+  artifact. Re-running the failed job reuses the broken artifact.
 - **Deploy step, authentication error:** the token is expired, deleted or
   lacks Pages edit. Rotate it.
 - **Preflight, variable not set or malformed:** the `terraform/github`

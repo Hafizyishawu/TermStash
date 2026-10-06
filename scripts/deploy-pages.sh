@@ -26,8 +26,20 @@ for name in CLOUDFLARE_ACCOUNT_ID PAGES_PROJECT_NAME GITHUB_SHA; do
     exit 2
   fi
 done
-if [[ ! -f "$site_dir/index.html" ]]; then
-  echo "deploy-pages: $site_dir/index.html not found; build the site first" >&2
+# Every file the build produces must be here. A step between the build and
+# this job once dropped a hidden directory without an error; refuse to upload
+# an incomplete site rather than find out from the verify step after it is
+# live. The list comes from the build script, so it cannot drift from it.
+if ! expected="$(node "$root/scripts/build-site.js" --list)" || [[ -z "$expected" ]]; then
+  echo "deploy-pages: could not list the files the build produces" >&2
+  exit 2
+fi
+missing=()
+while IFS= read -r file; do
+  [[ -f "$site_dir/$file" ]] || missing+=("$file")
+done <<< "$expected"
+if (( ${#missing[@]} )); then
+  echo "deploy-pages: $site_dir is missing ${missing[*]}; not uploading an incomplete site" >&2
   exit 2
 fi
 

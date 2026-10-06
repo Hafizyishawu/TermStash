@@ -45,6 +45,8 @@ jobs:
         with:
           name: site
           path: dist/
+          # Off by default, which silently dropped .well-known/security.txt.
+          include-hidden-files: true
           if-no-files-found: error
           retention-days: 30
 
@@ -57,8 +59,9 @@ jobs:
     environment:
       name: production
       url: https://termstash.app
-    # A deploy never cancels one in progress; a newer queued deploy replaces
-    # an older one still waiting, so the newest approved main wins.
+    # A deploy never cancels one in progress. A deploy waiting for approval
+    # also holds the slot, so the next one queues behind it until it is
+    # approved, rejected or cancelled; GitHub keeps only the newest queued.
     concurrency:
       group: deploy-production
       cancel-in-progress: false
