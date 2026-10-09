@@ -9,8 +9,14 @@
   // they cannot clutter saved commands, exports or backups.
   const catalog = window.TermStash.catalog || [];
   const CATALOG_RESULT_LIMIT = 40;
+  // Starters stay on the empty search until this many commands are saved;
+  // hiding them after the first save made them look lost.
+  const STARTERS_UNTIL_SAVED = 10;
   // Share of a pasted command's words a suggestion must contain to count as similar.
   const SIMILARITY_THRESHOLD = 0.6;
+  // When nothing matches every search word, the entries sharing the most words
+  // are shown instead, so a typo or an extra word never leaves no hints.
+  const CLOSEST_LIMIT = 8;
 
   const BACKUP_NUDGE_AFTER_MS = 14 * 24 * 60 * 60 * 1000;
   const BACKUP_NUDGE_MIN_COMMANDS = 5;
@@ -32,6 +38,10 @@
   // Rows are items of three kinds: "saved" commands, "catalog" suggestions,
   // and a "draft" row offering to save pasted text. Keys are "<kind>:<id>".
   let selectedKey = null;
+  // Set when the user picks a row with the keyboard or mouse, cleared when the
+  // search changes. A typed search with no saved match selects nothing on its
+  // own, so Enter saves the text instead of copying a guessed suggestion.
+  let selectionChosen = false;
   let lastSuggestedTitle = "";
   let fillTarget = null;
   let pendingImport = null;
@@ -128,15 +138,17 @@
   }
 
   // Catalog matches exclude anything already saved, ranked by how many search
-  // words appear in the title. Suggestions only show on an empty notepad or
-  // when searching, so they never crowd the user's own list.
+  // words appear in the title. With no search, the starters show below the
+  // user's list until STARTERS_UNTIL_SAVED commands are saved.
   function catalogSuggestions(query) {
     if (!catalog.length) return { items: [], total: 0 };
+    const saved = new Set(state.commands.map((cmd) => commands.dedupeKey(cmd.command)));
     if (!query.trim()) {
-      const starters = state.commands.length === 0 ? catalog.filter((entry) => entry.starter) : [];
+      const starters = state.commands.length < STARTERS_UNTIL_SAVED
+        ? catalog.filter((entry) => entry.starter && !saved.has(commands.dedupeKey(entry.command)))
+        : [];
       return { items: starters.map((cmd) => ({ kind: "catalog", cmd })), total: starters.length };
     }
-    const saved = new Set(state.commands.map((cmd) => commands.dedupeKey(cmd.command)));
     const terms = query.toLowerCase().split(/\s+/).filter((term) => term && !term.startsWith("#"));
     const ranked = pastedText !== null
       ? similarCatalogEntries(terms)
@@ -144,11 +156,56 @@
         .map((entry) => ({ entry, score: terms.filter((term) => entry.title.toLowerCase().includes(term)).length }))
         .sort((a, b) => b.score - a.score)
         .map(({ entry }) => entry);
-    const matches = ranked.filter((entry) => !saved.has(commands.dedupeKey(entry.command)));
-    return {
-      items: matches.slice(0, CATALOG_RESULT_LIMIT).map((cmd) => ({ kind: "catalog", cmd })),
-      total: matches.length,
-    };
+    const unsaved = (entries) => entries.filter((entry) => !saved.has(commands.dedupeKey(entry.command)));
+    const matches = unsaved(ranked);
+    if (matches.length) {
+      return {
+        items: matches.slice(0, CATALOG_RESULT_LIMIT).map((cmd) => ({ kind: "catalog", cmd })),
+        total: matches.length,
+        closest: false,
+      };
+    }
+    // A paste keeps its similarity threshold: one shared word with a long
+    // pasted command is noise, and the draft row already offers to save it.
+    if (pastedText !== null) return { items: [], total: 0, closest: false };
+    // #tag words still filter the closest entries, as they do exact matches.
+    const tags = query.toLowerCase().split(/\s+/).filter((term) => term.startsWith("#") && term.length > 1).map((term) => term.slice(1));
+    const closest = unsaved(closestCatalogEntries(terms))
+      .filter((entry) => tags.every((tag) => entry.tags.includes(tag)))
+      .slice(0, CLOSEST_LIMIT);
+    return { items: closest.map((cmd) => ({ kind: "catalog", cmd })), total: closest.length, closest: true };
+  }
+
+  // Ranks entries by how many search words appear in their title, first
+  // command line or tags. Used only when nothing matches every word.
+  function closestCatalogEntries(queryTerms) {
+    // Corrects at most the first few unknown words, so a long input stays fast.
+    const MAX_CORRECTED = 5;
+    let corrections = 0;
+    const terms = [...new Set(queryTerms.filter((term) => term.length > 1).map((term) => {
+      if (corrections >= MAX_CORRECTED || term.length < 4 || wordCounts().has(term)) return term;
+      corrections++;
+      return correctTypo(term);
+    }))];
+    if (!terms.length) return [];
+    return catalog
+      .map((entry) => {
+        const firstLine = entry.command.split("\n").find((line) => line.trim() && !line.trim().startsWith("#")) || "";
+        const haystack = [entry.title, firstLine, ...entry.tags].join("\n").toLowerCase();
+        const words = new Set(haystack.split(/[^a-z0-9-]+/));
+        // A whole-word match counts fully; a match inside a longer word, such
+        // as "plan" in "tfplan", counts less.
+        // A word in the command itself counts a little more than one only in
+        // the title, so "terraform plan" outranks "terraform apply tfplan".
+        const commandWords = new Set(firstLine.toLowerCase().split(/[^a-z0-9-]+/));
+        const score = terms.reduce((sum, term) =>
+          sum + (words.has(term) ? 1 : haystack.includes(term) ? 0.4 : 0) + (commandWords.has(term) ? 0.2 : 0), 0);
+        const inTitle = terms.filter((term) => entry.title.toLowerCase().includes(term)).length;
+        return { entry, score, inTitle };
+      })
+      .filter(({ score }) => score > 0)
+      .sort((a, b) => b.score - a.score || b.inTitle - a.inTitle || a.entry.command.length - b.entry.command.length)
+      .map(({ entry }) => entry);
   }
 
   // A pasted command rarely matches word-for-word: its values (a pod name, a
@@ -156,6 +213,7 @@
   // on words the catalog itself uses, since unknown words are almost always
   // values, and the program name must match.
   let catalogVocabulary = null;
+  let catalogWords = null;
   function normaliseTerm(term) {
     return term.startsWith("-") ? term.split("=")[0] : term;
   }
@@ -168,6 +226,65 @@
       }
     }
     return catalogVocabulary;
+  }
+
+  // Words in the catalog's titles, commands and tags, with how often each
+  // appears, for correcting typos in a search.
+  function wordCounts() {
+    if (!catalogWords) {
+      catalogWords = new Map();
+      for (const entry of catalog) {
+        const text = [entry.title, entry.command, ...entry.tags].join(" ").toLowerCase();
+        for (const word of text.split(/[^a-z0-9-]+/)) {
+          if (word.length > 1) catalogWords.set(word, (catalogWords.get(word) || 0) + 1);
+        }
+      }
+    }
+    return catalogWords;
+  }
+
+  // Edits needed to turn a into b, where swapping two adjacent letters counts
+  // as one edit ("dokcer" is one from "docker"), as is common in typing.
+  function editDistance(a, b, limit) {
+    if (Math.abs(a.length - b.length) > limit) return limit + 1;
+    let beforePrevious = null;
+    let previous = Array.from({ length: b.length + 1 }, (_, index) => index);
+    for (let i = 1; i <= a.length; i++) {
+      const current = [i];
+      let rowBest = i;
+      for (let j = 1; j <= b.length; j++) {
+        current[j] = Math.min(previous[j] + 1, current[j - 1] + 1, previous[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+        if (beforePrevious && i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) {
+          current[j] = Math.min(current[j], beforePrevious[j - 2] + 1);
+        }
+        rowBest = Math.min(rowBest, current[j]);
+      }
+      if (rowBest > limit) return limit + 1;
+      beforePrevious = previous;
+      previous = current;
+    }
+    return previous[b.length];
+  }
+
+  // A word the catalog never uses is replaced by the closest one it does use,
+  // within one edit for short words and two for longer ones, preferring the
+  // more common word on a tie. "kubctl" becomes "kubectl".
+  const typoCorrections = new Map();
+
+  function correctTypo(term) {
+    const words = wordCounts();
+    if (term.length < 4 || words.has(term)) return term;
+    if (typoCorrections.has(term)) return typoCorrections.get(term);
+    const limit = term.length >= 7 ? 2 : 1;
+    let best = null;
+    for (const [word, count] of words) {
+      const distance = editDistance(term, word, limit);
+      if (distance > limit) continue;
+      if (!best || distance < best.distance || (distance === best.distance && count > best.count)) best = { word, distance, count };
+    }
+    const corrected = best ? best.word : term;
+    typoCorrections.set(term, corrected);
+    return corrected;
   }
 
   function similarCatalogEntries(queryTerms) {
@@ -206,7 +323,7 @@
     const saved = commands.search(state.commands, query).map((cmd) => ({ kind: "saved", cmd }));
     const suggestions = catalogSuggestions(query);
     const draft = draftItem(saved);
-    return { saved, draft, suggestions: suggestions.items, suggestionTotal: suggestions.total };
+    return { saved, draft, suggestions: suggestions.items, suggestionTotal: suggestions.total, closest: Boolean(suggestions.closest) };
   }
 
   function orderedItems({ saved, draft, suggestions }) {
@@ -221,18 +338,31 @@
     renderBanner();
     const visible = visibleItems();
     const items = orderedItems(visible);
-    if (!items.some((item) => itemKey(item) === selectedKey)) selectedKey = items[0] ? itemKey(items[0]) : null;
+    const query = $("search").value.trim();
+    const offerSave = Boolean(query) && visible.saved.length === 0 && !visible.draft;
+    // Exact suggestions are selected as before, so Enter copies the top one.
+    // Closest suggestions are guesses: none is selected unless the user picks
+    // it, so Enter saves the typed text instead of copying a guess.
+    const guessesOnly = offerSave && (visible.closest || visible.suggestions.length === 0);
+    const chosenStillShown = selectionChosen && items.some((item) => itemKey(item) === selectedKey);
+    if (guessesOnly && !chosenStillShown) {
+      selectedKey = null;
+      selectionChosen = false;
+    } else if (!items.some((item) => itemKey(item) === selectedKey)) {
+      selectedKey = items[0] ? itemKey(items[0]) : null;
+    }
 
     const total = state.commands.length;
-    const query = $("search").value.trim();
     const rows = [];
     if (visible.draft) rows.push(renderRow(visible.draft));
     rows.push(...visible.saved.map(renderRow));
     if (visible.suggestions.length) {
-      const heading = query ? "Suggestions" : "Start with a suggestion";
-      const detail = query && visible.suggestionTotal > visible.suggestions.length
-        ? `Top ${visible.suggestions.length} of ${visible.suggestionTotal}`
-        : "Built-in, not saved until you save them";
+      const heading = !query ? "Start with a suggestion" : visible.closest ? "Closest suggestions" : "Suggestions";
+      const detail = visible.closest
+        ? "No built-in command has every word"
+        : query && visible.suggestionTotal > visible.suggestions.length
+          ? `Top ${visible.suggestions.length} of ${visible.suggestionTotal}`
+          : "Built-in, not saved until you save them";
       rows.push(h("li", { className: "group-label" }, h("span", { text: heading }), h("span", { className: "group-detail", text: detail })));
       rows.push(...visible.suggestions.map(renderRow));
     }
@@ -240,10 +370,18 @@
 
     $("empty-state").hidden = total !== 0 || query !== "";
     $("command-list").hidden = items.length === 0;
-    $("no-results").hidden = !(query && items.length === 0);
+    // Offered whenever no saved command matches a typed search, even with
+    // suggestions below it; a paste already gets its own draft row.
+    $("no-results").hidden = !offerSave;
+    // The Enter hint shows on the save button only when Enter will save.
+    $("no-results-new").querySelector("kbd").hidden = selectedKey !== null;
     $("no-results-query").textContent = query;
     $("catalog-count").textContent = catalog.length.toLocaleString();
     $("catalog-hint").hidden = catalog.length === 0;
+    // Whenever no starter is on screen, by count or because all were saved,
+    // one line keeps the catalog discoverable.
+    $("catalog-search-count").textContent = catalog.length.toLocaleString();
+    $("catalog-search-hint").hidden = !(catalog.length && !query && total > 0 && visible.suggestions.length === 0);
     const savedPart = total === 0 ? "" : query ? `${visible.saved.length} of ${plural(total, "saved command")}` : plural(total, "saved command");
     const suggestionPart = query && visible.suggestionTotal ? plural(visible.suggestionTotal, "suggestion") : "";
     $("result-count").textContent = [savedPart, suggestionPart].filter(Boolean).join(" · ");
@@ -335,6 +473,7 @@
 
   function select(key) {
     selectedKey = key;
+    selectionChosen = true;
     render();
     document.querySelector('.row[aria-current="true"]')?.scrollIntoView({ block: "nearest" });
   }
@@ -401,6 +540,7 @@
   function setSearch(value) {
     $("search").value = value;
     pastedText = null;
+    selectionChosen = false;
     render();
   }
 
@@ -959,11 +1099,13 @@
     if (event.target === search) search.setRangeText(flattened, search.selectionStart, search.selectionEnd, "end");
     else search.value = flattened;
     pastedText = search.value === flattened ? original : null;
+    selectionChosen = false;
     search.focus();
     render();
   }
 
   function onSearchInput() {
+    selectionChosen = false;
     if (pastedText !== null && $("search").value !== flattenForSearch(pastedText)) pastedText = null;
     render();
   }

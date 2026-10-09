@@ -32,6 +32,13 @@ for (const colorScheme of ["light", "dark"]) {
       await scan(page, `main ${colorScheme}`);
     });
 
+    test("a search with no saved match has no serious accessibility violations", async ({ page }) => {
+      await page.goto("/");
+      await page.locator("#search").fill("kubctl logs");
+      await expect(page.locator("#no-results")).toBeVisible();
+      await scan(page, `search ${colorScheme}`);
+    });
+
     test("the editor dialog has no serious accessibility violations", async ({ page }) => {
       await page.goto("/");
       await page.locator("#new-command").click();

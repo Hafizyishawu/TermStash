@@ -46,13 +46,16 @@
         <p id="catalog-hint" class="muted">Or start from a suggestion below. Search covers <span id="catalog-count">0</span> built-in commands: try <span class="mono">#kubectl</span> or <span class="mono">rollout</span>.</p>
       </section>
 
-      <ul id="command-list" class="rows"></ul>
-
       <div id="no-results" class="no-results" hidden>
         <p class="no-results-title">No saved command matches</p>
         <p id="no-results-query" class="no-results-query mono"></p>
         <button type="button" id="no-results-new" class="btn btn-primary">Save as new command <kbd class="kbd kbd-on-accent">&crarr;</kbd></button>
       </div>
+
+      <ul id="command-list" class="rows"></ul>
+
+      <p id="catalog-search-hint" class="list-hint muted" hidden>Search <span id="catalog-search-count">0</span> built-in commands: try <span class="mono">#kubectl</span> or <span class="mono">rollout</span>.</p>
+
 
       <footer class="palette-foot">
         <span id="result-count" class="foot-count" aria-live="polite"></span>
