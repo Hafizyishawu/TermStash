@@ -468,6 +468,7 @@ a.btn { text-decoration: none; }
 }
 .group-label:first-child { padding-top: var(--space-2); }
 .group-detail { font-weight: 500; letter-spacing: 0; text-transform: none; }
+.list-hint { margin: 0; padding: var(--space-3) var(--space-4) var(--space-4); font-size: var(--fs-sm); }
 
 .row-command.is-query::before { content: none; }
 .row.is-draft .tool { color: var(--accent); background: var(--accent-soft); font-size: var(--fs-md); }
