@@ -233,7 +233,7 @@
       const detail = query && visible.suggestionTotal > visible.suggestions.length
         ? `Top ${visible.suggestions.length} of ${visible.suggestionTotal}`
         : "Built-in, not saved until you save them";
-      rows.push(h("li", { className: "group-label", role: "presentation" }, h("span", { text: heading }), h("span", { className: "group-detail", text: detail })));
+      rows.push(h("li", { className: "group-label" }, h("span", { text: heading }), h("span", { className: "group-detail", text: detail })));
       rows.push(...visible.suggestions.map(renderRow));
     }
     $("command-list").replaceChildren(...rows);
