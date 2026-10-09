@@ -24,7 +24,7 @@ variable "repository_visibility" {
 variable "required_status_checks" {
   type        = list(string)
   description = "GitHub Actions job names that must pass before a pull request can merge into the default branch. Each check is pinned to the GitHub Actions app, so a check reported by any other app (HCP Terraform included) can never satisfy it. Every name here must run on every pull request, or merges block forever."
-  default     = ["test", "terraform"]
+  default     = ["test", "terraform", "e2e"]
 }
 
 variable "production_reviewers" {

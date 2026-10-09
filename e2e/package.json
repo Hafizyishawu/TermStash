@@ -1,0 +1,17 @@
+{
+  "name": "termstash-e2e",
+  "private": true,
+  "description": "Browser tests for the built site. Kept apart from the app, which has no dependencies, so test tooling never reaches the site.",
+  "license": "FSL-1.1-ALv2",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "4.13.0",
+    "@playwright/test": "1.63.0",
+    "playwright-core": "1.63.0"
+  }
+}

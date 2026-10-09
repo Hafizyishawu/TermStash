@@ -37,7 +37,8 @@
   --line-strong: rgba(255, 255, 255, 0.13);
   --text: #ededf0;
   --text-secondary: #a0a3aa;
-  --text-tertiary: #6c7079;
+  /* Lightest text that still meets WCAG AA (4.5:1) on every panel. */
+  --text-tertiary: #7e828a;
   --accent: #3ddc97;
   --accent-hover: #5ae6a8;
   --accent-ink: #03170e;
@@ -73,7 +74,7 @@
     --line-strong: rgba(0, 0, 0, 0.14);
     --text: #17171a;
     --text-secondary: #52525a;
-    --text-tertiary: #8a8a92;
+    --text-tertiary: #6e6e75;
     --accent: #087f50;
     --accent-hover: #0a9460;
     --accent-ink: #ffffff;
@@ -94,7 +95,7 @@
     --tool-saturation: 55%;
     --tool-bg-lightness: 50%;
     --tool-bg-alpha: 0.12;
-    --tool-text-lightness: 34%;
+    --tool-text-lightness: 30%;
     color-scheme: light;
   }
 }
