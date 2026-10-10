@@ -169,6 +169,14 @@ body {
     border-color var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out);
 }
 a.btn { text-decoration: none; }
+.popped-out {
+  max-width: 420px;
+  margin: 20vh auto 0;
+  padding: 0 var(--space-4);
+  text-align: center;
+}
+.popped-out h2 { margin: 0 0 var(--space-2); font-size: var(--fs-lg); font-weight: 600; }
+.popped-out p { margin: 0 0 var(--space-5); }
 .btn:active { transform: translateY(1px); }
 .btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
 .btn-primary { color: var(--accent-ink); background: var(--accent); }

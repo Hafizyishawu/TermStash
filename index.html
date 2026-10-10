@@ -26,6 +26,7 @@
       <nav class="appbar-actions" aria-label="Pack actions">
         <button id="import-pack" type="button" class="btn btn-quiet">Import</button>
         <button id="export-pack" type="button" class="btn btn-quiet">Export</button>
+        <button id="pop-out" type="button" class="btn btn-quiet" title="Keep a small TermStash window above your other tabs and apps" hidden>Pop out</button>
         <button id="new-command" type="button" class="btn btn-primary">New command <kbd class="kbd kbd-on-accent">N</kbd></button>
         <input id="import-file" type="file" accept=".json,application/json" hidden>
       </nav>
@@ -67,6 +68,12 @@
       </footer>
     </section>
   </div>
+
+  <section id="popped-out" class="popped-out" hidden>
+    <h2>TermStash is open in a pop-out window</h2>
+    <p class="muted">It stays above your other tabs and apps. Closing it brings TermStash back here.</p>
+    <button id="pop-back" type="button" class="btn btn-primary">Bring it back</button>
+  </section>
 
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 
