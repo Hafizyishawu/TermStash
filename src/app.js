@@ -28,7 +28,13 @@
   const KEY_GUARD_AFTER_DIALOG_MS = 350;
   let lastDialogClosedAt = -Infinity;
 
-  const $ = (id) => document.getElementById(id);
+  // The interface can be moved into a Document Picture-in-Picture window
+  // ("Pop out"). Lookups go to whichever window holds it; the main tab keeps
+  // only a placeholder while it is popped out.
+  let popOutWindow = null;
+  const host = () => popOutWindow || window;
+  const doc = () => host().document;
+  const $ = (id) => doc().getElementById(id);
 
   let state = commands.emptyState();
   let storage = null;
@@ -336,6 +342,8 @@
 
   function render() {
     renderBanner();
+    // Hidden where unsupported, and inside the pop-out itself.
+    $("pop-out").hidden = !popOutSupported || popOutWindow !== null;
     const visible = visibleItems();
     const items = orderedItems(visible);
     const query = $("search").value.trim();
@@ -475,7 +483,7 @@
     selectedKey = key;
     selectionChosen = true;
     render();
-    document.querySelector('.row[aria-current="true"]')?.scrollIntoView({ block: "nearest" });
+    doc().querySelector('.row[aria-current="true"]')?.scrollIntoView({ block: "nearest" });
   }
 
   function moveSelection(delta) {
@@ -561,7 +569,8 @@
     let timer;
     try {
       await Promise.race([
-        navigator.clipboard.writeText(text),
+        // The window the user is in must write: an unfocused one is refused.
+        host().navigator.clipboard.writeText(text),
         new Promise((_, reject) => { timer = setTimeout(() => reject(new Error("clipboard timeout")), CLIPBOARD_TIMEOUT_MS); }),
       ]);
       return true;
@@ -569,9 +578,9 @@
       // file:// pages and some embedded contexts lack the async Clipboard API.
       const area = h("textarea", { className: "offscreen", readonly: true });
       area.value = text;
-      document.body.append(area);
+      doc().body.append(area);
       area.select();
-      const ok = document.execCommand("copy");
+      const ok = doc().execCommand("copy");
       area.remove();
       return ok;
     } finally {
@@ -825,7 +834,7 @@
   }
 
   function exportSelection() {
-    const scope = document.querySelector("input[name=export-scope]:checked").value;
+    const scope = doc().querySelector("input[name=export-scope]:checked").value;
     return scope === "shown" ? visibleCommands() : state.commands;
   }
 
@@ -861,7 +870,7 @@
   function download(filename, text) {
     const url = URL.createObjectURL(new Blob([text], { type: "application/json" }));
     const link = h("a", { href: url, download: filename });
-    document.body.append(link);
+    doc().body.append(link);
     link.click();
     link.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
@@ -994,7 +1003,7 @@
   }
 
   function anyDialogOpen() {
-    return [...document.querySelectorAll("dialog")].some((d) => d.open);
+    return [...doc().querySelectorAll("dialog")].some((d) => d.open);
   }
 
   function hasModifier(event) {
@@ -1048,6 +1057,9 @@
   }
 
   function onGlobalKey(event) {
+    // While popped out, the tab shows only a placeholder: its keys must not
+    // drive the pop-out, and the reverse.
+    if (event.currentTarget !== doc()) return;
     if (anyDialogOpen()) return;
     if (event.target === $("search")) return;
     if (isTyping(event.target) || isInteractive(event.target)) return;
@@ -1089,6 +1101,7 @@
   // page, because the usual reason to paste is "do I already have this?".
   // When nothing matches, the no-results state offers to save it.
   function onGlobalPaste(event) {
+    if (event.currentTarget !== doc()) return;
     const search = $("search");
     if (anyDialogOpen() || (isTyping(event.target) && event.target !== search)) return;
     const text = event.clipboardData?.getData("text/plain");
@@ -1175,9 +1188,122 @@
     document.addEventListener("keydown", onGlobalKey);
     document.addEventListener("paste", onGlobalPaste);
     window.addEventListener("storage", onStorageEvent);
+    wirePopOut();
     render();
     registerServiceWorker();
     $("search").focus();
+  }
+
+  // Picture-in-Picture keeps a small TermStash window above every other tab
+  // and app. Chrome and Edge 116+ only; elsewhere the button stays hidden.
+  // The live interface is moved, not copied, so there is one app and one
+  // state; its event handlers move with the nodes.
+  const POP_OUT_SIZE = { width: 420, height: 560 };
+  let popOutSupported = false;
+  // Set while a pop-out is opening, so a second click cannot open another.
+  let popOutPending = false;
+  // The moved nodes, kept here so they can always be brought back, and a
+  // timer that notices the pop-out closing even if its pagehide never fires
+  // (an abrupt close can skip it), so the app never vanishes from the tab.
+  let poppedNodes = [];
+  let popOutWatch = null;
+  const POP_OUT_WATCH_MS = 500;
+
+  function popOutNodes() {
+    return [document.querySelector(".app"), document.getElementById("toast"), ...document.querySelectorAll("dialog")];
+  }
+
+  async function popOut() {
+    if (popOutWindow || popOutPending || !("documentPictureInPicture" in window)) return;
+    popOutPending = true;
+    try {
+      await openPopOut();
+    } finally {
+      popOutPending = false;
+    }
+  }
+
+  async function openPopOut() {
+    let pip;
+    try {
+      pip = await window.documentPictureInPicture.requestWindow(POP_OUT_SIZE);
+    } catch {
+      // Refused, for example without a user gesture or in an embedded frame.
+      toast("Pop out isn't available here");
+      return;
+    }
+    pip.document.title = "TermStash";
+    pip.document.documentElement.lang = document.documentElement.lang;
+    // The interface moves in only once its styles have loaded, so it never
+    // shows unstyled.
+    const loaded = [...document.querySelectorAll('link[rel="stylesheet"]')].map((sheet) => {
+      const link = pip.document.createElement("link");
+      link.rel = "stylesheet";
+      link.href = sheet.href;
+      const ready = new Promise((resolve) => {
+        link.addEventListener("load", resolve, { once: true });
+        link.addEventListener("error", resolve, { once: true });
+      });
+      pip.document.head.append(link);
+      return ready;
+    });
+    await Promise.all(loaded);
+    const scheme = document.querySelector('meta[name="color-scheme"]');
+    if (scheme) pip.document.head.append(scheme.cloneNode());
+    poppedNodes = popOutNodes();
+    pip.document.body.append(...poppedNodes);
+    pip.document.addEventListener("keydown", onGlobalKey);
+    pip.document.addEventListener("paste", onGlobalPaste);
+    pip.addEventListener("pagehide", bringBack, { once: true });
+    popOutWindow = pip;
+    popOutWatch = setInterval(() => {
+      if (popOutWindow?.closed) bringBack();
+    }, POP_OUT_WATCH_MS);
+    document.getElementById("popped-out").hidden = false;
+    render();
+    // Opens at the top, with the search box in view and focused.
+    pip.scrollTo(0, 0);
+    $("search").focus();
+  }
+
+  // Runs when the pop-out closes, however it closes.
+  function bringBack() {
+    if (!popOutWindow) return;
+    clearInterval(popOutWatch);
+    popOutWatch = null;
+    const placeholder = document.getElementById("popped-out");
+    const nodes = poppedNodes;
+    poppedNodes = [];
+    // Moving a modal dialog between documents drops it from the top layer but
+    // leaves it marked open: non-modal, no backdrop, Escape ignored. Reopen
+    // each one as modal in the tab.
+    const openDialogs = nodes.filter((node) => node.matches("dialog") && node.open);
+    placeholder.before(...nodes);
+    for (const dialog of openDialogs) {
+      dialog.removeAttribute("open");
+      dialog.showModal();
+    }
+    popOutWindow = null;
+    placeholder.hidden = true;
+    render();
+    $("search").focus();
+  }
+
+  function wirePopOut() {
+    popOutSupported = "documentPictureInPicture" in window && window.isSecureContext;
+    // Background tabs throttle timers to about once a minute, so returning to
+    // the tab also checks for a closed pop-out and recovers at once.
+    const recoverIfClosed = () => {
+      if (popOutWindow?.closed) bringBack();
+    };
+    window.addEventListener("focus", recoverIfClosed);
+    document.addEventListener("visibilitychange", recoverIfClosed);
+    $("pop-out").addEventListener("click", popOut);
+    document.getElementById("pop-back").addEventListener("click", () => {
+      if (!popOutWindow) return;
+      if (popOutWindow.closed) bringBack();
+      else popOutWindow.close();
+    });
   }
 
   init();

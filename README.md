@@ -16,6 +16,10 @@ and TermStash names it. When you need it again, one click copies it.
   command before anything is added.
 - **Offline and local.** No backend, no accounts, no network requests. Once it
   has loaded over http(s), a service worker keeps it working offline.
+- **Pop out.** In Chrome and Edge, Pop out keeps a small TermStash window above
+  your other tabs and apps; closing it brings TermStash back to its tab.
+- **Install it.** Chrome and Edge can install TermStash as an app (Install in
+  the address bar), giving it its own window and dock icon.
 
 ## Using it
 
